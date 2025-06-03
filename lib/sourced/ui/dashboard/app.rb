@@ -36,7 +36,6 @@ module Sourced
             when '/'
               phlex(Components::SystemPage.new(stats: Sourced.config.backend.stats))
             when '/updates'
-              datastar = Datastar.from_rack_env(request.env)
               stats = Sourced.config.backend.stats
               datastar.stream do |sse|
                 while true
@@ -46,9 +45,24 @@ module Sourced
                   next unless stats != new_stats
 
                   stats = new_stats
-                  sse.merge_fragments SystemPage::Consumers.new(stats:)
+                  sse.merge_fragments Components::SystemPage::Consumers.new(stats:)
                 end
               end
+            when '/consumer-groups/resume' # POST
+              group_id = datastar.signals['group_id']
+              Sourced.config.backend.start_consumer_group(group_id)
+
+              [204, {'Content-Type' => 'text/html'}, []]
+            when '/consumer-groups/stop' # POST
+              group_id = datastar.signals['group_id']
+              Sourced.config.backend.stop_consumer_group(group_id)
+
+              [204, {'Content-Type' => 'text/html'}, []]
+            when '/consumer-groups/reset' # POST
+              group_id = datastar.signals['group_id']
+              Sourced.config.backend.reset_consumer_group(group_id)
+
+              [204, {'Content-Type' => 'text/html'}, []]
             when '/reactors'
               [200, {'Content-Type' => 'text/html'}, ["<h1>Reactors page!</h1>"]]
             else
@@ -57,7 +71,17 @@ module Sourced
         end
 
         def phlex(component, status: 200)
-          [status, {'Content-Type' => 'text/html'}, [component.call(context: {request:})]]
+          [status, {'Content-Type' => 'text/html'}, [component.render_in(view_context)]]
+        end
+
+        def datastar
+          @datastar ||= (
+            Datastar.from_rack_env(request.env, view_context:)
+          )
+        end
+
+        def view_context
+          @view_context ||= Components::Component::Helpers.new(request:)
         end
       end
 

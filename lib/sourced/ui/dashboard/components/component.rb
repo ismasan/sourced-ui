@@ -7,10 +7,15 @@ module Sourced
     module Dashboard
       module Components
         class Component < Phlex::HTML
+          # Compatibility with Datastar
+          def render_in(view_context)
+            call(context: { view_context: })
+          end
+
           private
 
           def helpers
-            @helpers ||= Helpers.new(request: context.fetch(:request))
+            @helpers ||= context.fetch(:view_context)
           end
 
           class Helpers

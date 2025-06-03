@@ -75,18 +75,18 @@ module Sourced
                         end
                       end
                       if group[:status] == 'stopped'
-                        form(data: {'on-submit' => %(@post('#{helpers.url('/sourced/consumer-groups/resume')}', {contentType: 'form'}))}) do
+                        form(data: {'on-submit' => %(@post('#{helpers.url('/consumer-groups/resume')}', {contentType: 'form'}))}) do
                           input(type: 'hidden', name: 'group_id', value: group[:group_id])
                           button(type: 'submit') { 'Resume' }
                         end
                       else
-                        form(data: {'on-submit' => %(@post('#{helpers.url('/sourced/consumer-groups/stop')}', {contentType: 'form'}))}) do
+                        form(data: {'on-submit' => %(@post('#{helpers.url('/consumer-groups/stop')}', {contentType: 'form'}))}) do
                           input(type: 'hidden', name: 'group_id', value: group[:group_id])
                           button(type: 'submit') { 'Stop' }
                         end
                       end
 
-                      form(data: {'on-submit' => %(@post('#{helpers.url('/sourced/consumer-groups/reset')}', {contentType: 'form'}))}) do
+                      form(data: {'on-submit' => %(@post('#{helpers.url('/consumer-groups/reset')}', {contentType: 'form'}))}) do
                         input(type: 'hidden', name: 'group_id', value: group[:group_id])
                         button(type: 'submit') { 'Reset' }
                       end
