@@ -33,7 +33,7 @@ module Sourced
             end
 
             def url(path = nil)
-              path = path.gsub(/^\//, '') if path.is_a?(String)
+              path = strip_leading_hash(path) if path.is_a?(String)
               uri = [host = String.new]
               host << "http#{'s' if request.ssl?}://"
               if forwarded?(request) or request.port != (request.ssl? ? 443 : 80)
@@ -41,14 +41,18 @@ module Sourced
               else
                 host << request.host
               end
-              uri << request.script_name.to_s
+              uri << strip_leading_hash(request.script_name.to_s)
               uri << (path ? path : request.path_info).to_s
-              uri.filter { |s| s.bytesize > 0 }.join('/')
+              uri.filter { |s| !s.empty? }.join('/')
             end
 
             private
 
             attr_reader :request
+
+            def strip_leading_hash(path)
+              path.gsub(/^\//, '')
+            end
 
             def symbolize(hash)
               hash.each.with_object({}) do |(k, v), h|

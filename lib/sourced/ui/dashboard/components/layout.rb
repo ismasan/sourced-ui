@@ -18,15 +18,15 @@ module Sourced
               head do
                 meta(name: 'viewport', content: 'width=device-width, initial-scale=1.0')
                 title { @title }
-                link(rel: 'stylesheet', href: '/stylesheets/styles.css')
+                link(rel: 'stylesheet', href: helpers.url('/stylesheets/styles.css'))
                 script(type: 'module', src: 'https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-beta.11/bundles/datastar.js')
               end
 
               body(data: { 'signals' => '{"modal": false}' }) do
                 div class: 'nav' do
                   div class: 'link-group' do
-                    a(href: '/') { 'System' }
-                    a(href: '/reactors') { 'Reactors' }
+                    a(href: helpers.url) { 'System' }
+                    a(href: helpers.url('/reactors')) { 'Reactors' }
                   end
                 end
 

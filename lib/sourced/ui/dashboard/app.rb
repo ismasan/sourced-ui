@@ -32,7 +32,10 @@ module Sourced
         end
 
         def run
-          case request.path
+          path = request.path_info
+          path = '/' if path.empty?
+
+          case path
             when '/'
               phlex(Components::SystemPage.new(stats: Sourced.config.backend.stats))
             when '/updates'
