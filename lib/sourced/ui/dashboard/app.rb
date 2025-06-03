@@ -91,9 +91,7 @@ module Sourced
           cascade: true,
           headers: HEADER_RULES
 
-        # map '/' do
         run Router
-        # end
       end
     end
   end

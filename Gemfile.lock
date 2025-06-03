@@ -3,6 +3,7 @@ PATH
   specs:
     sourced-ui (0.1.0)
       datastar
+      logger
       phlex
       rack
       sourced
@@ -38,6 +39,7 @@ GEM
     fiber-storage (1.0.1)
     io-event (1.10.1)
     json (2.12.2)
+    logger (1.7.0)
     metrics (0.12.2)
     phlex (2.3.1)
       zeitwerk (~> 2.7)

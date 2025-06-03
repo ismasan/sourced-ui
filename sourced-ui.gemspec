@@ -38,6 +38,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'sourced'
   spec.add_dependency 'phlex'
   spec.add_dependency 'datastar'
+  spec.add_dependency 'logger' # required by Datastar. Should be required there.
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
