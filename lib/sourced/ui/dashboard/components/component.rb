@@ -19,45 +19,37 @@ module Sourced
           end
 
           class Helpers
-            HTTP_X_FORWARDED_HOST = 'HTTP_X_FORWARDED_HOST'.freeze
+            HTTP_X_FORWARDED_HOST = 'HTTP_X_FORWARDED_HOST'
 
             def initialize(request:)
               @request = request
-            end
-
-            def params
-              @params ||= (
-                upstream_params = request.env['action_dispatch.request.path_parameters'] || {}
-                symbolize(request.params).merge(symbolize(upstream_params))
-              )
+              # Rack::Request#script_name seems to mutate when accessed repeatedly,
+              # so we cache it here.
+              @script_name = request.script_name.to_s
+              @path_info = request.path_info.to_s
             end
 
             def url(path = nil)
               path = strip_leading_hash(path) if path.is_a?(String)
-              uri = [host = String.new]
+              host = String.new
+              uri = [strip_leading_hash(script_name)]
               host << "http#{'s' if request.ssl?}://"
               if forwarded?(request) or request.port != (request.ssl? ? 443 : 80)
                 host << request.host_with_port
               else
                 host << request.host
               end
-              uri << strip_leading_hash(request.script_name.to_s)
-              uri << (path ? path : request.path_info).to_s
-              uri.filter { |s| !s.empty? }.join('/')
+              uri << (path ? path : path_info).to_s
+              uri = uri.filter { |s| !s.empty? }.join('/')
+              host << '/' << uri
             end
 
             private
 
-            attr_reader :request
+            attr_reader :request, :script_name, :path_info
 
             def strip_leading_hash(path)
               path.gsub(/^\//, '')
-            end
-
-            def symbolize(hash)
-              hash.each.with_object({}) do |(k, v), h|
-                h[k.to_sym] = v
-              end
             end
 
             def forwarded?(req)
