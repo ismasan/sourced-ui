@@ -11,12 +11,21 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     end
   end
 
-  specify 'on.submit' do
+  specify 'on.submit.get' do
     component = component_class.new
     spec = component._d.on.submit.get('/sourced/correlation', content_type: 'form')
 
     expect(spec.to_h).to eq({
       'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
+    })
+  end
+
+  specify 'on.submit.post' do
+    component = component_class.new
+    spec = component._d.on.submit.post('/sourced/correlation', content_type: 'form')
+
+    expect(spec.to_h).to eq({
+      'on-submit' => %(@post('/sourced/correlation', {contentType: 'form'})),
     })
   end
 
@@ -41,7 +50,7 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
       focus
       blur
   ].each do |event|
-    specify "on.#{event}" do
+    specify "on.#{event}.get" do
       component = component_class.new
       spec = component._d.on.send(event).get('/sourced/correlation')
 

@@ -128,6 +128,8 @@ module Sourced
 
         # .get(url, modifiers = {})
         class HandlerSpec
+          VERBS = %i[get post put delete patch].freeze
+
           Action = Data.define(:name, :url, :modifiers) do
             def to_data
               args = [%('#{url}')]
@@ -149,10 +151,14 @@ module Sourced
             @actions = []
           end
 
-          def get(url, modifiers = {})
-            modifiers = camelize(modifiers)
-            @actions << Action.new(:get, url, modifiers)
-            @event_builder
+          # def get(url, modifiers = {})
+          # def post(url, modifiers = {})
+          VERBS.each do |verb|
+            define_method(verb) do |url, modifiers = {}|
+              modifiers = camelize(modifiers)
+              @actions << Action.new(verb, url, modifiers)
+              @event_builder
+            end
           end
 
           # %(@get('/sourced/correlation', {contentType: 'form'}))
