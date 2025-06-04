@@ -11,13 +11,43 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     end
   end
 
-  it "does something useful" do
+  specify 'on.submit' do
     component = component_class.new
-    
     spec = component._d.on.submit.get('/sourced/correlation', content_type: 'form')
 
     expect(spec.to_h).to eq({
       'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
     })
+  end
+
+  %i[
+      click
+      dblclick
+      mousedown
+      mouseup
+      mouseover
+      mouseout
+      mousemove
+      mouseenter
+      mouseleave
+      contextmenu
+      keydown
+      keyup
+      keypress
+      submit
+      reset
+      change
+      input
+      focus
+      blur
+  ].each do |event|
+    specify "on.#{event}" do
+      component = component_class.new
+      spec = component._d.on.send(event).get('/sourced/correlation')
+
+      expect(spec.to_h).to eq({
+        "on-#{event}" => %(@get('/sourced/correlation')),
+      })
+    end
   end
 end

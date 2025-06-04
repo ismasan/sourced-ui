@@ -25,13 +25,94 @@ module Sourced
 
         # .submit
         class EventBuilder
+          HANDLERS = %i[
+            click
+            dblclick
+            mousedown
+            mouseup
+            mouseover
+            mouseout
+            mousemove
+            mouseenter
+            mouseleave
+            contextmenu
+            keydown
+            keyup
+            keypress
+            submit
+            reset
+            change
+            input
+            focus
+            blur
+            focusin
+            focusout
+            select
+            invalid
+            load
+            unload
+            beforeunload
+            resize
+            scroll
+            error
+            abort
+            touchstart
+            touchend
+            touchmove
+            touchcancel
+            drag
+            dragstart
+            dragend
+            dragover
+            dragenter
+            dragleave
+            drop
+            play
+            pause
+            ended
+            volumechange
+            timeupdate
+            loadstart
+            loadeddata
+            loadedmetadata
+            canplay
+            canplaythrough
+            seeking
+            seeked
+            stalled
+            suspend
+            waiting
+            durationchange
+            ratechange
+            animationstart
+            animationend
+            animationiteration
+            transitionstart
+            transitionend
+            transitionrun
+            transitioncancel
+            wheel
+            copy
+            cut
+            paste
+            online
+            offline
+            popstate
+            hashchange
+            storage
+            message
+            toggle
+          ].freeze
+
           def initialize(builder)
             @builder = builder
             @handler_specs = {}
           end
 
-          def submit
-            @handler_specs[:submit] ||= HandlerSpec.new(self, :submit)
+          HANDLERS.each do |event_name|
+            define_method(event_name) do
+              @handler_specs[event_name] ||= HandlerSpec.new(self, event_name)
+            end
           end
 
           def to_h
