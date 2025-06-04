@@ -19,7 +19,7 @@ module Sourced
                   render Consumers.new(stats: @stats)
                 end
                 div id: 'sidebar' do
-                  form(data: {'on-submit' => %(@get('#{helpers.url('/sourced/correlation')}', {contentType: 'form'}))}) do
+                  form(data: _d.on.submit.get(helpers.url('/sourced/correlation'), content_type: 'form').to_h) do
                     input(type: 'text', placeholder: 'Event ID', name: 'event_id')
                     button(type: 'submit') { 'Go' }
                   end
@@ -27,10 +27,11 @@ module Sourced
                 end
               end
 
-              onload = { 'on-load' => %(@get('#{helpers.url('/updates')}')) }
+              # onload = { 'on-load' => %(@get('#{helpers.url('/updates')}')) }
+              onload = _d.on.load.get(helpers.url('/updates'))
               # onload needs to be at the end
               # to make sure to collect all signals on the page
-              div(data: onload)
+              div(data: onload.to_h)
             end
           end
 
@@ -75,18 +76,18 @@ module Sourced
                         end
                       end
                       if group[:status] == 'stopped'
-                        form(data: {'on-submit' => %(@post('#{helpers.url('/consumer-groups/resume')}', {contentType: 'form'}))}) do
+                        form(data: _d.on.submit.post(helpers.url('/consumer-groups/resume'), content_type: 'form').to_h) do
                           input(type: 'hidden', name: 'group_id', value: group[:group_id])
                           button(type: 'submit') { 'Resume' }
                         end
                       else
-                        form(data: {'on-submit' => %(@post('#{helpers.url('/consumer-groups/stop')}', {contentType: 'form'}))}) do
+                        form(data: _d.on.submit.post(helpers.url('/consumer-groups/stop'), content_type: 'form').to_h) do
                           input(type: 'hidden', name: 'group_id', value: group[:group_id])
                           button(type: 'submit') { 'Stop' }
                         end
                       end
 
-                      form(data: {'on-submit' => %(@post('#{helpers.url('/consumer-groups/reset')}', {contentType: 'form'}))}) do
+                      form(data: _d.on.submit.post(helpers.url('/consumer-groups/reset'), content_type: 'form').to_h) do
                         input(type: 'hidden', name: 'group_id', value: group[:group_id])
                         button(type: 'submit') { 'Reset' }
                       end
