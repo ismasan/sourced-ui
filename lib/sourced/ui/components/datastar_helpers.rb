@@ -136,9 +136,11 @@ module Sourced
             end
           end
 
+          # _d.on[:some_event]
+          # We allow unknown event names, which are possible
+          # when working with custom events (ex. `reordered`)
           def [](event_name)
             event_name = event_name.to_sym
-            raise ArgumentError, "Unknown event: #{event_name}" unless EVENT_NAMES.include?(event_name)
 
             __copy(event: event_name)
           end
