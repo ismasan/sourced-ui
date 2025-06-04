@@ -112,16 +112,18 @@ module Sourced
 
         # .on
         class Builder
-          def initialize(event: :click, actions: Hash.new { |h, k| h[k] = [] })
+          def initialize(event: :click, actions: Hash.new { |h, k| h[k] = [] }, signals: {})
             @event = event
             @actions = actions
+            @signals = signals
           end
 
           def __copy(
             event: @event, 
-            actions: @actions.dup
+            actions: @actions.dup,
+            signals: @signals.dup
           )
-            self.class.new(event:, actions:)
+            self.class.new(event:, actions:, signals:)
           end
 
           def on
@@ -149,8 +151,14 @@ module Sourced
             __copy(actions:)
           end
 
+          def signals(data)
+            signals = @signals.merge(data)
+            __copy(signals:)
+          end
+
           def to_h
-            @actions.each.with_object({}) do |(event_name, actions), data|
+            h = @signals.empty? ? {} : { signals: @signals.to_json }
+            @actions.each.with_object(h) do |(event_name, actions), data|
               data["on-#{event_name}"] = actions.map(&:to_data).join('; ')
             end
           end

@@ -29,10 +29,20 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     })
   end
 
+  specify 'signals' do
+    component = component_class.new
+    spec = component._d.signals(fooBar: 1)
+
+    expect(spec.to_h).to eq({
+      signals: '{"fooBar":1}'
+    })
+  end
+
   specify 'composing' do
     component = component_class.new
     spec1 = component._d.on.submit.get('/sourced/correlation', content_type: 'form')
     spec2 = spec1.on.click.post('/sourced/foo')
+    spec3 = spec2.signals(fooBar: 1)
 
     expect(spec1.to_h).to eq({
       'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'}))
@@ -41,6 +51,12 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     expect(spec2.to_h).to eq({
       'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
       'on-click' => %(@post('/sourced/foo')),
+    })
+
+    expect(spec3.to_h).to eq({
+      'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
+      'on-click' => %(@post('/sourced/foo')),
+      signals: '{"fooBar":1}'
     })
   end
 
