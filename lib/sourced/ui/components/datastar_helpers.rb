@@ -91,6 +91,10 @@ module Sourced
           Builder.new
         end
 
+        Code = Data.define(:code) do
+          def to_data = code
+        end
+
         Action = Data.define(:name, :url, :modifiers) do
           def to_data
             args = [%('#{url}')]
@@ -108,7 +112,7 @@ module Sourced
 
         # .on
         class Builder
-          def initialize(event: :click, actions: {})
+          def initialize(event: :click, actions: Hash.new { |h, k| h[k] = [] })
             @event = event
             @actions = actions
           end
@@ -134,14 +138,20 @@ module Sourced
             define_method(verb) do |url, modifiers = {}|
               modifiers = camelize(modifiers)
               actions = @actions.dup
-              actions[@event] = Action.new(verb, url, modifiers)
+              actions[@event] << Action.new(verb, url, modifiers)
               __copy(actions:)
             end
           end
 
+          def run(code)
+            actions = @actions.dup
+            actions[@event] << Code.new(code)
+            __copy(actions:)
+          end
+
           def to_h
-            @actions.each.with_object({}) do |(event_name, action), data|
-              data["on-#{event_name}"] = action.to_data
+            @actions.each.with_object({}) do |(event_name, actions), data|
+              data["on-#{event_name}"] = actions.map(&:to_data).join('; ')
             end
           end
 
