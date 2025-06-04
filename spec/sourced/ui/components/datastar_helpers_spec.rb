@@ -29,6 +29,21 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     })
   end
 
+  specify 'composing' do
+    component = component_class.new
+    spec1 = component._d.on.submit.get('/sourced/correlation', content_type: 'form')
+    spec2 = spec1.on.click.post('/sourced/foo')
+
+    expect(spec1.to_h).to eq({
+      'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'}))
+    })
+
+    expect(spec2.to_h).to eq({
+      'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
+      'on-click' => %(@post('/sourced/foo')),
+    })
+  end
+
   %i[
       click
       dblclick
