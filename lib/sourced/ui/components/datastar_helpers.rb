@@ -8,7 +8,7 @@ module Sourced
       module DatastarHelpers
         VERBS = %i[get post put delete patch].freeze
 
-        HANDLERS = %i[
+        EVENT_NAMES = %i[
           click
           dblclick
           mousedown
@@ -130,10 +130,17 @@ module Sourced
             __copy
           end
 
-          HANDLERS.each do |event_name|
+          EVENT_NAMES.each do |event_name|
             define_method(event_name) do
               __copy(event: event_name)
             end
+          end
+
+          def [](event_name)
+            event_name = event_name.to_sym
+            raise ArgumentError, "Unknown event: #{event_name}" unless EVENT_NAMES.include?(event_name)
+
+            __copy(event: event_name)
           end
 
           VERBS.each do |verb|

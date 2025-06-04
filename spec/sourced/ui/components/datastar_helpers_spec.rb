@@ -69,6 +69,15 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     })
   end
 
+  specify 'on[:click].run' do
+    component = component_class.new
+    spec = component._d.on[:click].run('a = b')
+
+    expect(spec.to_h).to eq({
+      'on-click' => %(a = b),
+    })
+  end
+
   %i[
       click
       dblclick
