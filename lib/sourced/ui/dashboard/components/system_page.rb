@@ -65,8 +65,10 @@ module Sourced
               @total_streams = stats.stream_count
               @width = width
               @groups = stats.groups.map do |g|
-                min = (g[:oldest_processed].to_f / stats.max_global_seq) * width
-                max = (1 - (g[:newest_processed].to_f / stats.max_global_seq)) * width
+                oldest = g[:oldest_processed]
+                newest = g[:newest_processed]
+                min = oldest.positive? ? ((oldest.to_f / stats.max_global_seq) * width) : 0
+                max = newest.positive? ? ((1 - (newest.to_f / stats.max_global_seq)) * width) : 0
                 g.merge(min:, max:)
               end
             end
