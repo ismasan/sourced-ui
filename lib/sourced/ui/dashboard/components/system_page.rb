@@ -7,8 +7,9 @@ module Sourced
     module Dashboard
       module Components
         class SystemPage < Component
-          def initialize(stats:)
+          def initialize(stats:, streams: [])
             @stats = stats
+            @streams = streams
           end
 
           def view_template
@@ -19,11 +20,7 @@ module Sourced
                   render Consumers.new(stats: @stats)
                 end
                 div id: 'sidebar' do
-                  form(data: _d.on.submit.get(helpers.url('/sourced/correlation'), content_type: 'form').to_h) do
-                    input(type: 'text', placeholder: 'Event ID', name: 'event_id')
-                    button(type: 'submit') { 'Go' }
-                  end
-                  div(id: 'events-tree')
+                  render Streams.new(streams: @streams)
                 end
               end
 
@@ -35,21 +32,47 @@ module Sourced
             end
           end
 
-          class Consumers < Component
-            WIDTH = 1000
+          class Streams < Component
+            def initialize(streams:)
+              @streams = streams
+            end
 
-            def initialize(stats:)
+            def view_template
+              div(id: 'streams') do
+                h2 { 'Recent streams' }
+                ul(class: 'streams-list') do
+                  @streams.each do |stream|
+                    li do
+                      h5 do
+                        span(class: 'seq') { stream.seq }
+                        a(href: helpers.url("/streams/#{stream.stream_id}")) { stream.stream_id }
+                      end
+                      div(class: 'stream-details') do
+                        small(class: 'updated-at') { stream.updated_at.to_s }
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+
+          class Consumers < Component
+            WIDTH = 800
+
+            def initialize(stats:, width: WIDTH)
               @tip = stats.max_global_seq
               @total_streams = stats.stream_count
+              @width = width
               @groups = stats.groups.map do |g|
-                min = (g[:oldest_processed].to_f / stats.max_global_seq) * WIDTH
-                max = (1 - (g[:newest_processed].to_f / stats.max_global_seq)) * WIDTH
+                min = (g[:oldest_processed].to_f / stats.max_global_seq) * width
+                max = (1 - (g[:newest_processed].to_f / stats.max_global_seq)) * width
                 g.merge(min:, max:)
               end
             end
 
             def view_template
-              div(id: 'consumers', class: 'consumers', style: "width:#{WIDTH}px") do
+              div(id: 'consumers', class: 'consumers', style: "width:#{@width}px") do
                 div(class: 'stream-container') do
                   div(class: 'stream-label') do
                     strong { 'Global Event Stream' }

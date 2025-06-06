@@ -7,6 +7,8 @@ require 'sourced'
 require 'datastar'
 require 'sourced/ui/dashboard/components'
 require 'sourced/ui/dashboard/components/system_page'
+require 'sourced/ui/dashboard/components/stream_page'
+require 'sourced/ui/dashboard/components/events_tree'
 
 module Sourced
   module UI
@@ -42,6 +44,13 @@ module Sourced
               stats = Sourced.config.backend.stats
               datastar.stream do |sse|
                 while true
+                  sleep 1
+                  streams = Sourced.config.backend.recent_streams
+                  sse.merge_fragments Components::SystemPage::Streams.new(streams:)
+                end
+              end
+              datastar.stream do |sse|
+                while true
                   sleep 0.1
                   new_stats = Sourced.config.backend.stats
                   # Only stream updates to the UI if stats changed
@@ -66,6 +75,23 @@ module Sourced
               Sourced.config.backend.reset_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
+            when /\/streams\/([^\/]*)\/([^\/]*)$/ # /streams/12343-re332/foobar
+              stream_id = Regexp.last_match(1)
+              event_id = Regexp.last_match(2)
+
+              events = Sourced.config.backend.read_event_stream(stream_id)
+              correlated_events = Sourced.config.backend.read_correlation_batch(event_id)
+              comp = Components::StreamPage.new(
+                stream_id:, 
+                event_id:,
+                events:, 
+                content: Components::EventsTree.new(events: correlated_events, highlighted: event_id)
+              )
+              phlex(comp)
+            when /\/streams\/([^\/]*)$/ # /streams/12343-re332
+              stream_id = Regexp.last_match(1)
+              events = Sourced.config.backend.read_event_stream(stream_id)
+              phlex(Components::StreamPage.new(stream_id:, events:))
             when '/reactors'
               [200, {'Content-Type' => 'text/html'}, ["<h1>Reactors page!</h1>"]]
             else

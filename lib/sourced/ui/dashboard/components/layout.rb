@@ -18,15 +18,29 @@ module Sourced
               head do
                 meta(name: 'viewport', content: 'width=device-width, initial-scale=1.0')
                 title { @title }
-                link(rel: 'stylesheet', href: helpers.url('/stylesheets/styles.css'))
+                link(rel: 'stylesheet', href: helpers.url("/stylesheets/styles.css?r=#{Time.now}"))
                 script(type: 'module', src: 'https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-beta.11/bundles/datastar.js')
               end
 
               body(data: { 'signals' => '{"modal": false}' }) do
                 div class: 'nav' do
-                  div class: 'link-group' do
-                    a(href: helpers.url) { 'System' }
-                    a(href: helpers.url('/reactors')) { 'Reactors' }
+                  if Sourced::UI::Dashboard.configuration.header_links.any?
+                    div class: 'link-group custom' do
+                      Sourced::UI::Dashboard.configuration.header_links.each do |link|
+                        if link.url
+                          a(href: helpers.url(link.href)) { link.label }
+                        else
+                          a(href: link.href) { link.label }
+                        end
+                      end
+                    end
+                  end
+
+                  div class: 'link-group dashboard' do
+                    Sourced::UI::Dashboard.configuration.header_links.each do |link|
+                      a(href: helpers.url('/')) { 'System' }
+                      a(href: helpers.url('/reactors'))  { 'Reactors' }
+                    end
                   end
                 end
 
