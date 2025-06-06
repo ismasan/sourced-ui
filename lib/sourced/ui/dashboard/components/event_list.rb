@@ -8,12 +8,12 @@ module Sourced
     module Dashboard
       module Components
         class EventList < Component
-          def initialize(events:, highlighted: nil, reverse: true)
+          def initialize(events:, seq: nil, reverse: true)
             @events = events
             @first_seq = @events.first&.seq
             @last_seq = @events.last&.seq
+            @seq = seq || @last_seq
             @events = @events.reverse if reverse
-            @highlighted = highlighted
           end
 
           def view_template
@@ -21,9 +21,21 @@ module Sourced
               div class: 'header' do
                 h2 { 'History' }
                 if @events.any?
+
+                  disabled_back = @first_seq == @seq
+                  disabled_forward = @last_seq == @seq
+
                   div(class: 'history-tools') do
                     span(class: 'pagination') do
-                      small { "current sequence number: #{@last_seq} " }
+                      button(disabled: disabled_back,
+                        data: _d.on.click.get(helpers.url("/streams/#{@events.first.stream_id}/#{@seq - 1}")).to_h) do
+                        safe('&larr;')
+                      end
+                      button(disabled: disabled_forward,
+                        data: _d.on.click.get(helpers.url("/streams/#{@events.first.stream_id}/#{@seq + 1}")).to_h) do
+                        safe('&rarr;')
+                      end
+                      small { "sequence: #{@seq} " }
                     end
 
                     div(class: 'switches') do
@@ -38,8 +50,8 @@ module Sourced
                 @events.each do |event|
                   MessageRow(
                     event,
-                    highlighted: (event.id == @highlighted),
-                    href: helpers.url("/streams/#{event.stream_id}/#{event.id}")
+                    highlighted: (event.seq == @seq),
+                    href: helpers.url("/streams/#{event.stream_id}/#{event.seq}")
                   )
                 end
               end

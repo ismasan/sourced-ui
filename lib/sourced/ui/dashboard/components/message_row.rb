@@ -25,12 +25,13 @@ module Sourced
             div(id: event.id, class: @classes) do
               div(class: 'event-header') do
                 span(class: 'event-sequence') do
-                  correlation_ref = _d.on.click.get(helpers.url("/events/#{event.id}/correlation"))
-                  a(id: SecureRandom.hex(8), data: correlation_ref.to_h) { event.seq }
+                  detail_ref = _d.on.click.get(@href)
+                  a(id: SecureRandom.hex(8), data: detail_ref.to_h) { event.seq }
                 end
                 producer_for(event)
                 span(class: 'event-type') do
-                  a(href: @href) { event.type }
+                  correlation_ref = _d.on.click.get(helpers.url("/events/#{event.id}/correlation"))
+                  a(id: SecureRandom.hex(8), data: correlation_ref.to_h) { event.type }
                 end
                 span(class: 'event-timestamp') { event.created_at.to_s }
                 span(class: 'event-author') { event.metadata[:username].to_s }

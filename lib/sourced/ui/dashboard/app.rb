@@ -40,7 +40,11 @@ module Sourced
 
           case path
             when '/'
-              phlex(Components::SystemPage.new(stats: Sourced.config.backend.stats))
+              streams = Sourced.config.backend.recent_streams
+              phlex(Components::SystemPage.new(
+                stats: Sourced.config.backend.stats,
+                streams:
+              ))
             when '/updates'
               stats = Sourced.config.backend.stats
               datastar.stream do |sse|
@@ -76,15 +80,30 @@ module Sourced
               Sourced.config.backend.reset_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
-            when /\/streams\/([^\/]*)\/([^\/]*)$/ # /streams/12343-re332/foobar
+            when /\/streams\/([^\/]*)\/(\d+)$/ # /streams/12343-re332/10
               stream_id = Regexp.last_match(1)
-              event_id = Regexp.last_match(2)
+              seq = Regexp.last_match(2).to_i
               events = Sourced.config.backend.read_event_stream(stream_id)
-              phlex Components::StreamPage.new(stream_id:, event_id:, events:)
+
+              if datastar.sse?
+                datastar.stream do |sse|
+                  sse.execute_script <<-JS
+                    history.replaceState({}, '', '#{request.path}');
+                  JS
+                  sse.merge_fragments Components::StreamPage.new(
+                    stream_id:, 
+                    seq:,
+                    events:,
+                    layout: false
+                  )
+                end
+              else
+                phlex Components::StreamPage.new(stream_id:, seq:, events:)
+              end
             when /\/streams\/([^\/]*)$/ # /streams/12343-re332
               stream_id = Regexp.last_match(1)
               events = Sourced.config.backend.read_event_stream(stream_id)
-              phlex Components::StreamPage.new(stream_id:, event_id: events.last&.id, events:)
+              phlex Components::StreamPage.new(stream_id:, events:)
             when /\/events\/([^\/]*)\/correlation$/ # /streams/12343-re332
               event_id = Regexp.last_match(1)
 
