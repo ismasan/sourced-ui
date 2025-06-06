@@ -9,9 +9,9 @@ module Sourced
         class EventsTree < Component
           Node = Struct.new(:parent, :children)
 
-          def initialize(events: [], highlighted: nil)
+          def initialize(events: [], event_id: nil)
             @events = build_tree(events)
-            @current_event = highlighted ? events.find { |e| e.id == highlighted } : nil
+            @event_id = event_id
           end
 
           private def build_tree(events)
@@ -38,28 +38,9 @@ module Sourced
 
           def view_template
             div(id: 'events-tree', class: 'events-timeline') do
-              if @current_event
-                h4 { 'Current event' }
-                div(class: 'current-event') do
-                  dl(class: 'event-meta prop-table') do
-                    dt { 'event ID'}
-                    dd { @current_event.id.to_s }
-                    dt { 'created at'}
-                    dd { @current_event.created_at.to_s }
-                    dt { 'correlation ID'}
-                    dd { @current_event.correlation_id }
-                    dt { 'causation ID'}
-                    dd { @current_event.causation_id }
-                    dt { 'sequence in stream'}
-                    dd { @current_event.seq }
-                    @current_event.metadata&.each do |key, value|
-                      dt { key.to_s }
-                      dd { value.to_s }
-                    end
-                  end
-                end
+              button(class: 'toggle-payloads', data: { on: { click: '$showPayloads = !$showPayloads' } }) do
+                span(data: { text: '$showPayloads ? "Hide Payloads" : "Show Payloads"' })
               end
-              h4 { 'Correlation view' }
               ul(class: 'tree tree-view') do
                 @events.each do |node|
                   render_node(node)
@@ -74,7 +55,7 @@ module Sourced
               MessageRow(
                 event,
                 href: nil,
-                highlighted: @current_event&.id == event.id
+                highlighted: @event_id == event.id
               )
 
               if node.children.any?

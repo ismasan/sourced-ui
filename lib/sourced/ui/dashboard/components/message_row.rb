@@ -25,11 +25,8 @@ module Sourced
             div(id: event.id, class: @classes) do
               div(class: 'event-header') do
                 span(class: 'event-sequence') do
-                  if @href
-                    a(href: @href) { event.seq }
-                  else
-                    span { event.seq }
-                  end
+                  correlation_ref = _d.on.click.get(helpers.url("/events/#{event.id}/correlation"))
+                  a(id: SecureRandom.hex(8), data: correlation_ref.to_h) { event.seq }
                 end
                 producer_for(event)
                 span(class: 'event-type') do

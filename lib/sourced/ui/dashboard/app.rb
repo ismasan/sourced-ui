@@ -6,6 +6,7 @@ require 'rack/static'
 require 'sourced'
 require 'datastar'
 require 'sourced/ui/dashboard/components'
+require 'sourced/ui/dashboard/components/modal'
 require 'sourced/ui/dashboard/components/system_page'
 require 'sourced/ui/dashboard/components/stream_page'
 require 'sourced/ui/dashboard/components/events_tree'
@@ -78,20 +79,23 @@ module Sourced
             when /\/streams\/([^\/]*)\/([^\/]*)$/ # /streams/12343-re332/foobar
               stream_id = Regexp.last_match(1)
               event_id = Regexp.last_match(2)
-
               events = Sourced.config.backend.read_event_stream(stream_id)
-              correlated_events = Sourced.config.backend.read_correlation_batch(event_id)
-              comp = Components::StreamPage.new(
-                stream_id:, 
-                event_id:,
-                events:, 
-                content: Components::EventsTree.new(events: correlated_events, highlighted: event_id)
-              )
-              phlex(comp)
+              phlex Components::StreamPage.new(stream_id:, event_id:, events:)
             when /\/streams\/([^\/]*)$/ # /streams/12343-re332
               stream_id = Regexp.last_match(1)
               events = Sourced.config.backend.read_event_stream(stream_id)
-              phlex(Components::StreamPage.new(stream_id:, events:))
+              phlex Components::StreamPage.new(stream_id:, event_id: events.last&.id, events:)
+            when /\/events\/([^\/]*)\/correlation$/ # /streams/12343-re332
+              event_id = Regexp.last_match(1)
+
+              events = Sourced.config.backend.read_correlation_batch(event_id)
+              datastar.stream do |sse|
+                sse.merge_fragments Components::Modal.new(
+                  title: 'Event correlation',
+                  content: Components::EventsTree.new(events:, event_id:)
+                )
+                sse.merge_signals modal: true
+              end
             when '/reactors'
               [200, {'Content-Type' => 'text/html'}, ["<h1>Reactors page!</h1>"]]
             else
