@@ -506,11 +506,6 @@ h1 {
   background-color: green;
   transition: background-color 0.2s;
 }
-.fade-in {
-  opacity: 0;
-  max-height: 0;
-  animation: fadeIn 0.3s ease-in forwards;
-}
 
 /* Streams list */
 .streams-list {
