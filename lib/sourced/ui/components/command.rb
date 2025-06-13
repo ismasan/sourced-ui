@@ -24,8 +24,9 @@ module Sourced
         end
 
         def initialize(command_class, attrs = {})
-          @on = attrs.delete(:on) || 'submit'
+          @on = attrs.delete(:on) || ['submit']
           @href = attrs.delete(:href) || '/commands'
+          @ajax = attrs.key?(:ajax) ? attrs.delete(:ajax) : true
           stream_id = attrs.delete(:stream_id)
           args = {}
           args[:stream_id] = stream_id if stream_id
@@ -35,13 +36,23 @@ module Sourced
         end
 
         def view_template
-          local_data = _d.on[@on].post(@href, content_type: 'form').to_h.merge(
-            'indicator-fetching' => true
-          )
-          data = @attrs.fetch(:data, {}).merge(local_data)
+          data = @attrs.fetch(:data, {})
+          if @ajax
+            local_data = {
+              'indicator-fetching' => true
+            }
+            @on.each do |event|
+              local_data["on-#{event}"] = %(@post('#{@href}', {contentType: 'form'}))
+            end
+            data.merge!(local_data)
+          else
+            @attrs[:action] = @href
+            @attrs[:method] = @on.include?('submit') ? 'post' : @on.first
+          end
           attrs = @attrs.merge(data:)
 
           form(**attrs) do
+            # TODO: CSRF token
             input(type: 'hidden', name: 'command[stream_id]', value: command.stream_id) if command.stream_id
             input(type: 'hidden', name: 'command[type]', value: command.type)
             input(type: 'hidden', name: 'command[_cid]', value: @cid.to_s)
@@ -59,6 +70,12 @@ module Sourced
         def text_field(name, args = {})
           with_errors(name) do |id|
             input **args.merge(id:, type: 'text', name: "command[payload][#{name}]")
+          end
+        end
+
+        def number_field(name, args = {})
+          with_errors(name) do |id|
+            input **args.merge(id:, type: 'number', name: "command[payload][#{name}]")
           end
         end
 
