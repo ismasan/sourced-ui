@@ -29,7 +29,7 @@ module Sourced
           errors.each do |field, error|
             # 'text', "can't be blank"
             field_id = [cid, field].join('-')
-            sse.merge_fragments Sourced::UI::Components::Command::ErrorMessages.new(field_id, error)
+            sse.patch_elements Sourced::UI::Components::Command::ErrorMessages.new(field_id, error)
             wrapper_id = [field_id, 'wrapper'].join('-')
             sse.execute_script %(document.getElementById("#{wrapper_id}").classList.add('errors'))
           end

@@ -30,7 +30,9 @@ GEM
       fiber-annotation
       fiber-local (~> 1.1)
       json
-    datastar (1.0.0.beta.3)
+    datastar (1.0.0.pre.1)
+      json
+      logger
       rack (>= 3.1.14)
     diff-lcs (1.6.2)
     fiber-annotation (0.2.0)
@@ -46,7 +48,7 @@ GEM
     plumb (0.0.12)
       bigdecimal
       concurrent-ruby
-    rack (3.1.15)
+    rack (3.1.16)
     rake (13.3.0)
     rspec (3.13.1)
       rspec-core (~> 3.13.0)

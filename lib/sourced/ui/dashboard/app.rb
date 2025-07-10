@@ -51,7 +51,7 @@ module Sourced
                 while true
                   sleep 1
                   streams = Sourced.config.backend.recent_streams
-                  sse.merge_fragments Components::SystemPage::Streams.new(streams:)
+                  sse.patch_elements Components::SystemPage::Streams.new(streams:)
                 end
               end
               datastar.stream do |sse|
@@ -62,7 +62,7 @@ module Sourced
                   next unless stats != new_stats
 
                   stats = new_stats
-                  sse.merge_fragments Components::SystemPage::Consumers.new(stats:)
+                  sse.patch_elements Components::SystemPage::Consumers.new(stats:)
                 end
               end
             when '/consumer-groups/resume' # POST
@@ -90,7 +90,7 @@ module Sourced
                   sse.execute_script <<-JS
                     history.replaceState({}, '', '#{request.path}');
                   JS
-                  sse.merge_fragments Components::StreamPage.new(
+                  sse.patch_elements Components::StreamPage.new(
                     stream_id:, 
                     seq:,
                     events:,
@@ -109,11 +109,11 @@ module Sourced
 
               events = Sourced.config.backend.read_correlation_batch(event_id)
               datastar.stream do |sse|
-                sse.merge_fragments Components::Modal.new(
+                sse.patch_elements Components::Modal.new(
                   title: 'Event correlation',
                   content: Components::EventsTree.new(events:, event_id:)
                 )
-                sse.merge_signals modal: true
+                sse.patch_signals modal: true
               end
             when '/reactors'
               [200, {'Content-Type' => 'text/html'}, ["<h1>Reactors page!</h1>"]]
