@@ -66,17 +66,17 @@ module Sourced
                 end
               end
             when '/consumer-groups/resume' # POST
-              group_id = datastar.signals['group_id']
+              group_id = request.params['group_id']
               Sourced.config.backend.start_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
             when '/consumer-groups/stop' # POST
-              group_id = datastar.signals['group_id']
+              group_id = request.params['group_id']
               Sourced.config.backend.stop_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
             when '/consumer-groups/reset' # POST
-              group_id = datastar.signals['group_id']
+              group_id = request.params['group_id']
               Sourced.config.backend.reset_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
