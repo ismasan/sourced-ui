@@ -21,7 +21,7 @@ module Sourced
       if cmd.valid? # <== schedule valid command for processing
         yield cmd if block_given?
       elsif cmd.errors[:payload] # <== Send back error fragments to UI
-        cid = datastar.signals['command']['_cid']
+        cid = datastar.request.params['command']['_cid']
 
         #[cid]-[name]-errors
         errors = cmd.errors[:payload]
