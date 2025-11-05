@@ -13,7 +13,7 @@ PATH
   specs:
     sourced (0.0.1)
       async
-      plumb (>= 0.0.12)
+      plumb (>= 0.0.17)
 
 GEM
   remote: https://rubygems.org/
@@ -45,7 +45,7 @@ GEM
     metrics (0.12.2)
     phlex (2.3.1)
       zeitwerk (~> 2.7)
-    plumb (0.0.12)
+    plumb (0.0.17)
       bigdecimal
       concurrent-ruby
     rack (3.2.0)

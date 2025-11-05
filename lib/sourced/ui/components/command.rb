@@ -24,7 +24,7 @@ module Sourced
         end
 
         def initialize(command_class, attrs = {})
-          @on = attrs.delete(:on) || ['submit']
+          @on = [attrs.delete(:on) || 'submit'].flatten
           @href = attrs.delete(:href) || '/commands'
           @ajax = attrs.key?(:ajax) ? attrs.delete(:ajax) : true
           stream_id = attrs.delete(:stream_id)
