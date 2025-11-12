@@ -83,7 +83,7 @@ module Sourced
             when /\/streams\/([^\/]*)\/(\d+)$/ # /streams/12343-re332/10
               stream_id = Regexp.last_match(1)
               seq = Regexp.last_match(2).to_i
-              events = Sourced.config.backend.read_event_stream(stream_id)
+              events = Sourced.config.backend.read_stream(stream_id)
 
               if datastar.sse?
                 datastar.stream do |sse|
@@ -102,7 +102,7 @@ module Sourced
               end
             when /\/streams\/([^\/]*)$/ # /streams/12343-re332
               stream_id = Regexp.last_match(1)
-              events = Sourced.config.backend.read_event_stream(stream_id)
+              events = Sourced.config.backend.read_stream(stream_id)
               phlex Components::StreamPage.new(stream_id:, events:)
             when /\/events\/([^\/]*)\/correlation$/ # /streams/12343-re332
               event_id = Regexp.last_match(1)
