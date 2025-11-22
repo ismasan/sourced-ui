@@ -16,7 +16,7 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     spec = component._d.on.submit.get('/sourced/correlation', content_type: 'form')
 
     expect(spec.to_h).to eq({
-      'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
+      'on:submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
     })
   end
 
@@ -25,7 +25,7 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     spec = component._d.on.submit.post('/sourced/correlation', content_type: 'form')
 
     expect(spec.to_h).to eq({
-      'on-submit' => %(@post('/sourced/correlation', {contentType: 'form'})),
+      'on:submit' => %(@post('/sourced/correlation', {contentType: 'form'})),
     })
   end
 
@@ -45,17 +45,17 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     spec3 = spec2.signals(fooBar: 1)
 
     expect(spec1.to_h).to eq({
-      'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'}))
+      'on:submit' => %(@get('/sourced/correlation', {contentType: 'form'}))
     })
 
     expect(spec2.to_h).to eq({
-      'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
-      'on-click' => %(@post('/sourced/foo')),
+      'on:submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
+      'on:click' => %(@post('/sourced/foo')),
     })
 
     expect(spec3.to_h).to eq({
-      'on-submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
-      'on-click' => %(@post('/sourced/foo')),
+      'on:submit' => %(@get('/sourced/correlation', {contentType: 'form'})),
+      'on:click' => %(@post('/sourced/foo')),
       signals: '{"fooBar":1}'
     })
   end
@@ -65,7 +65,7 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     spec = component._d.on.click.run('a = b')
 
     expect(spec.to_h).to eq({
-      'on-click' => %(a = b),
+      'on:click' => %(a = b),
     })
   end
 
@@ -74,7 +74,7 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     spec = component._d.on[:click].run('a = b')
 
     expect(spec.to_h).to eq({
-      'on-click' => %(a = b),
+      'on:click' => %(a = b),
     })
   end
 
@@ -104,7 +104,7 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
       spec = component._d.on.send(event).get('/sourced/correlation')
 
       expect(spec.to_h).to eq({
-        "on-#{event}" => %(@get('/sourced/correlation')),
+        "on:#{event}" => %(@get('/sourced/correlation')),
       })
     end
   end

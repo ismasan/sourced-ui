@@ -168,7 +168,7 @@ module Sourced
           def to_h
             h = @signals.empty? ? {} : { signals: @signals.to_json }
             @actions.each.with_object(h) do |(event_name, actions), data|
-              data["on-#{event_name}"] = actions.map(&:to_data).join('; ')
+              data["on:#{event_name}"] = actions.map(&:to_data).join('; ')
             end
           end
 
