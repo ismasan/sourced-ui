@@ -11,6 +11,15 @@ RSpec.describe Sourced::UI::Components::DatastarHelpers do
     end
   end
 
+  specify 'init' do
+    component = component_class.new
+    spec = component._d.init.get('/sourced/correlation', content_type: 'form')
+
+    expect(spec.to_h).to eq({
+      'init' => %(@get('/sourced/correlation', {contentType: 'form'})),
+    })
+  end
+
   specify 'on.submit.get' do
     component = component_class.new
     spec = component._d.on.submit.get('/sourced/correlation', content_type: 'form')

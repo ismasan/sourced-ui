@@ -7,6 +7,7 @@ module Sourced
     module Components
       module DatastarHelpers
         VERBS = %i[get post put delete patch].freeze
+        INIT = 'init'
 
         EVENT_NAMES = %i[
           click
@@ -126,6 +127,10 @@ module Sourced
             self.class.new(event:, actions:, signals:)
           end
 
+          def init
+            __copy(event: INIT)
+          end
+
           def on
             __copy
           end
@@ -168,7 +173,8 @@ module Sourced
           def to_h
             h = @signals.empty? ? {} : { signals: @signals.to_json }
             @actions.each.with_object(h) do |(event_name, actions), data|
-              data["on:#{event_name}"] = actions.map(&:to_data).join('; ')
+              event_name = "on:#{event_name}" unless event_name == INIT
+              data[event_name] = actions.map(&:to_data).join('; ')
             end
           end
 
