@@ -15,7 +15,7 @@ module Sourced
 
           def view_template
             div(id: 'modal', data: { show: '$modal' }) do
-              div(class: 'modal-underlay', data: { 'on-click' => '$modal = false' })
+              div(class: 'modal-underlay', data: { 'on:click' => '$modal = false' })
               div(class: 'modal-content') do
                 h1 { @title }
                 if @content
@@ -26,7 +26,7 @@ module Sourced
                 if @buttons
                   br
                   whitespace
-                  button(class: 'btn danger', data: { 'on-click' => '$modal = false' }) do
+                  button(class: 'btn danger', data: { 'on:click' => '$modal = false' }) do
                     'Close'
                   end
                 end

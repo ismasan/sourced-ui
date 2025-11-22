@@ -25,7 +25,7 @@ module Sourced
               end
 
               # onload = { 'on-load' => %(@get('#{helpers.url('/updates')}')) }
-              onload = _d.on.load.get(helpers.url('/updates'))
+              onload = _d.init.get(helpers.url('/updates'))
               # onload needs to be at the end
               # to make sure to collect all signals on the page
               div(data: onload.to_h)
