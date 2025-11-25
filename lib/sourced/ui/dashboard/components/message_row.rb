@@ -26,7 +26,7 @@ module Sourced
               div(class: 'event-header') do
                 span(class: 'event-sequence') do
                   detail_ref = _d.on.click.get(@href)
-                  a(id: SecureRandom.hex(8), data: detail_ref.to_h) { event.seq }
+                  a(title: event.stream_id, id: SecureRandom.hex(8), data: detail_ref.to_h) { event.seq }
                 end
                 producer_for(event)
                 span(class: 'event-type') do

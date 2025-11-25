@@ -7,38 +7,14 @@ module Sourced
     module Dashboard
       module Components
         class EventsTree < Component
-          Node = Struct.new(:parent, :children)
-
           def initialize(events: [], event_id: nil)
-            @events = build_tree(events)
+            @events = Sourced::UI::Dashboard.build_causation_tree(events)
             @event_id = event_id
-          end
-
-          private def build_tree(events)
-            # Create a lookup hash for quick access to events by ID
-            node_map = events.each_with_object({}) { |event, map| map[event.id] = Node.new(event, []) }
-
-            # Track root events (those without parents)
-            root_nodes = []
-
-            # Build parent-child relationships
-            node_map.values.each do |node|
-              if node.parent.causation_id == node.parent.id
-                # This is a root event
-                root_nodes << node
-              else
-                # Find parent and add this event as its child
-                parent = node_map[node.parent.causation_id]
-                parent.children << node if parent
-              end
-            end
-
-            root_nodes
           end
 
           def view_template
             div(id: 'events-tree', class: 'events-timeline') do
-              button(class: 'toggle-payloads', data: { on: { click: '$showPayloads = !$showPayloads' } }) do
+              button(class: 'toggle-payloads', data: { 'on:click' => '$showPayloads = !$showPayloads'  }) do
                 span(data: { text: '$showPayloads ? "Hide Payloads" : "Show Payloads"' })
               end
               ul(class: 'tree tree-view') do
@@ -51,7 +27,7 @@ module Sourced
 
           def render_node(node)
             li do
-              event = node.parent
+              event = node.message
               MessageRow(
                 event,
                 href: nil,

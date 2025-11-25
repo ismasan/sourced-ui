@@ -34,12 +34,22 @@ GEM
       json
       logger
       rack (>= 3.1.14)
+    date (3.4.1)
+    debug (1.11.0)
+      irb (~> 1.10)
+      reline (>= 0.3.8)
     diff-lcs (1.6.2)
+    erb (5.1.1)
     fiber-annotation (0.2.0)
     fiber-local (1.1.0)
       fiber-storage
     fiber-storage (1.0.1)
+    io-console (0.8.1)
     io-event (1.10.1)
+    irb (1.15.2)
+      pp (>= 0.6.0)
+      rdoc (>= 4.0.0)
+      reline (>= 0.4.2)
     json (2.13.2)
     logger (1.7.0)
     metrics (0.12.2)
@@ -48,8 +58,20 @@ GEM
     plumb (0.0.17)
       bigdecimal
       concurrent-ruby
+    pp (0.6.3)
+      prettyprint
+    prettyprint (0.2.0)
+    psych (5.2.6)
+      date
+      stringio
     rack (3.2.0)
     rake (13.3.0)
+    rdoc (6.15.0)
+      erb
+      psych (>= 4.0.0)
+      tsort
+    reline (0.6.2)
+      io-console (~> 0.5)
     rspec (3.13.1)
       rspec-core (~> 3.13.0)
       rspec-expectations (~> 3.13.0)
@@ -63,7 +85,9 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.13.0)
     rspec-support (3.13.4)
+    stringio (3.1.7)
     traces (0.15.2)
+    tsort (0.2.0)
     zeitwerk (2.7.3)
 
 PLATFORMS
@@ -71,6 +95,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  debug
   rake (~> 13.0)
   rspec (~> 3.0)
   sourced!

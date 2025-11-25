@@ -10,3 +10,7 @@ gem "rake", "~> 13.0"
 gem "rspec", "~> 3.0"
 
 gem 'sourced', path: '/Users/ismasan/code/personal/gems/sourced'
+
+group :test do
+  gem 'debug'
+end
