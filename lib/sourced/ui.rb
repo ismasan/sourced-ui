@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'sourced'
+require 'datastar'
 require_relative "ui/version"
 
 module Sourced
@@ -37,6 +39,22 @@ module Sourced
       else # <== This should never happen
         raise Sourced::UI::Error, "Command #{cmd.type} is invalid: #{cmd.errors}"
       end
+    end
+
+    def self.configure_from(sourced_config)
+      case sourced_config.executor
+      when Sourced::AsyncExecutor
+        require 'datastar/async_executor'
+        Datastar.config.executor = Datastar::AsyncExecutor.new
+        Sourced.config.logger.info "Configuring Datastar with AsyncExecutor"
+      when Sourced::ThreadExecutor
+        Datastar.config.executor = Datastar::ThreadExecutor.new
+        Sourced.config.logger.info "Configuring Datastar with ThreadExecutor"
+      end
+    end
+
+    Sourced.config.subscribe do |config|
+      configure_from(config)
     end
   end
 end
