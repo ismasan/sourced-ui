@@ -325,6 +325,8 @@ h2 {
 }
 
 .consumer-stopped {
+  background: var(--red-50);
+  border-color: var(--red-300);
   .stream-bar {
     border: solid 1px var(--red-300);
   }
