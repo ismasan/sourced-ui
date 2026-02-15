@@ -222,6 +222,11 @@ h1 {
 }
 
 /* Consumer stats */
+.consumers {
+  max-width: 800px;
+  width: 100%;
+}
+
 .stream-container {
   margin: 10px 0;
   position: relative;

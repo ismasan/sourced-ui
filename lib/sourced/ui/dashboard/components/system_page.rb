@@ -58,23 +58,20 @@ module Sourced
           end
 
           class Consumers < Component
-            WIDTH = 800
-
-            def initialize(stats:, width: WIDTH)
+            def initialize(stats:)
               @tip = stats.max_global_seq
               @total_streams = stats.stream_count
-              @width = width
               @groups = stats.groups.map do |g|
                 oldest = g[:oldest_processed]
                 newest = g[:newest_processed]
-                min = oldest.positive? ? ((oldest.to_f / stats.max_global_seq) * width) : 0
-                max = newest.positive? ? ((1 - (newest.to_f / stats.max_global_seq)) * width) : 0
+                min = oldest.positive? ? ((oldest.to_f / stats.max_global_seq) * 100) : 0
+                max = newest.positive? ? ((1 - (newest.to_f / stats.max_global_seq)) * 100) : 0
                 g.merge(min:, max:)
               end
             end
 
             def view_template
-              div(id: 'consumers', class: 'consumers', style: "width:#{@width}px") do
+              div(id: 'consumers', class: 'consumers') do
                 div(class: 'stream-container') do
                   div(class: 'stream-label') do
                     strong { 'Global Event Stream' }
@@ -119,10 +116,10 @@ module Sourced
                       small { " (#{group[:stream_count]} streams)" }
                     end
                     div(class: 'stream-bar') do
-                      div(class: 'lower-range', style: "width:#{group[:min]}px") do
+                      div(class: 'lower-range', style: "width:#{group[:min]}%") do
                         div(class: 'tooltip') { group[:oldest_processed] }
                       end
-                      div(class: 'upper-range', style: "width:#{group[:max]}px") do
+                      div(class: 'upper-range', style: "width:#{group[:max]}%") do
                         div(class: 'tooltip') { group[:newest_processed] }
                       end
                     end
