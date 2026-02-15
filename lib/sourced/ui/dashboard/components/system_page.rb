@@ -100,18 +100,18 @@ module Sourced
                       if group[:status] == 'stopped'
                         form(data: _d.on.submit.post(helpers.url('/consumer-groups/resume'), content_type: 'form').to_h) do
                           input(type: 'hidden', name: 'group_id', value: group[:group_id])
-                          button(type: 'submit') { 'Resume' }
+                          button(type: 'submit', class: 'btn btn-resume') { 'Resume' }
                         end
                       else
                         form(data: _d.on.submit.post(helpers.url('/consumer-groups/stop'), content_type: 'form').to_h) do
                           input(type: 'hidden', name: 'group_id', value: group[:group_id])
-                          button(type: 'submit') { 'Stop' }
+                          button(type: 'submit', class: 'btn btn-stop') { 'Stop' }
                         end
                       end
 
                       form(data: _d.on.submit.post(helpers.url('/consumer-groups/reset'), content_type: 'form').to_h) do
                         input(type: 'hidden', name: 'group_id', value: group[:group_id])
-                        button(type: 'submit') { 'Reset' }
+                        button(type: 'submit', class: 'btn btn-reset') { 'Reset' }
                       end
                       small { " (#{group[:stream_count]} streams)" }
                     end
