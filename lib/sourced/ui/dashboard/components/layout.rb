@@ -40,6 +40,7 @@ module Sourced
                     Sourced::UI::Dashboard.configuration.header_links.each do |link|
                       a(href: helpers.url('/')) { 'System' }
                       a(href: helpers.url('/reactors'))  { 'Reactors' }
+                      a(href: helpers.url('/topology'))  { 'Topology' }
                     end
                   end
                 end

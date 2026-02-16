@@ -10,6 +10,7 @@ require 'sourced/ui/dashboard/components/modal'
 require 'sourced/ui/dashboard/components/system_page'
 require 'sourced/ui/dashboard/components/stream_page'
 require 'sourced/ui/dashboard/components/events_tree'
+require 'sourced/ui/dashboard/components/topology_page'
 
 module Sourced
   module UI
@@ -115,6 +116,8 @@ module Sourced
                 )
                 sse.patch_signals modal: true
               end
+            when '/topology'
+              phlex(Components::TopologyPage.new(topology: Sourced.topology.map(&:to_h)))
             when '/reactors'
               [200, {'Content-Type' => 'text/html'}, ["<h1>Reactors page!</h1>"]]
             else
