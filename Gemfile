@@ -13,4 +13,5 @@ gem 'sourced', path: '/Users/ismasan/code/personal/gems/sourced'
 
 group :test do
   gem 'debug'
+  gem 'nokogiri'
 end

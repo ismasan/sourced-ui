@@ -27,10 +27,7 @@ module Sourced
           @on = [attrs.delete(:on) || 'submit'].flatten
           @href = attrs.delete(:href) || '/commands'
           @ajax = attrs.key?(:ajax) ? attrs.delete(:ajax) : true
-          stream_id = attrs.delete(:stream_id)
-          args = {}
-          args[:stream_id] = stream_id if stream_id
-          @command = command_class.new(args)
+          @command = command_class.new
           @attrs = attrs
           @cid = LocalID.new(['cmd', SecureRandom.hex(3)].join)
         end
@@ -52,8 +49,6 @@ module Sourced
           attrs = @attrs.merge(data:)
 
           form(**attrs) do
-            # TODO: CSRF token
-            input(type: 'hidden', name: 'command[stream_id]', value: command.stream_id) if command.stream_id
             input(type: 'hidden', name: 'command[type]', value: command.type)
             input(type: 'hidden', name: 'command[_cid]', value: @cid.to_s)
 
