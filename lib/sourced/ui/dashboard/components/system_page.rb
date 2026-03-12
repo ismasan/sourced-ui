@@ -7,9 +7,9 @@ module Sourced
     module Dashboard
       module Components
         class SystemPage < Component
-          def initialize(stats:, streams: [])
+          def initialize(stats:, messages: [])
             @stats = stats
-            @streams = streams
+            @messages = messages
           end
 
           def view_template
@@ -20,35 +20,32 @@ module Sourced
                   render Consumers.new(stats: @stats)
                 end
                 div id: 'sidebar' do
-                  render Streams.new(streams: @streams)
+                  render Messages.new(messages: @messages)
                 end
               end
 
-              # onload = { 'on-load' => %(@get('#{helpers.url('/updates')}')) }
               onload = _d.init.get(helpers.url('/updates'))
-              # onload needs to be at the end
-              # to make sure to collect all signals on the page
               div(data: onload.to_h)
             end
           end
 
-          class Streams < Component
-            def initialize(streams:)
-              @streams = streams
+          class Messages < Component
+            def initialize(messages:)
+              @messages = messages
             end
 
             def view_template
-              div(id: 'streams') do
-                h2 { 'Recent streams' }
+              div(id: 'messages') do
+                h2 { 'Recent messages' }
                 ul(class: 'streams-list') do
-                  @streams.each do |stream|
+                  @messages.reverse_each do |msg|
                     li do
                       h5 do
-                        span(class: 'seq') { stream.seq }
-                        a(href: helpers.url("/streams/#{stream.stream_id}")) { stream.stream_id }
+                        span(class: 'seq') { msg.position }
+                        a(href: helpers.url("/log/#{msg.position}")) { msg.type }
                       end
                       div(class: 'stream-details') do
-                        small(class: 'updated-at') { stream.updated_at.to_s }
+                        small(class: 'updated-at') { msg.created_at.to_s }
                       end
                     end
                   end
@@ -59,13 +56,12 @@ module Sourced
 
           class Consumers < Component
             def initialize(stats:)
-              @tip = stats.max_global_seq
-              @total_streams = stats.stream_count
+              @tip = stats.max_position
               @groups = stats.groups.map do |g|
                 oldest = g[:oldest_processed]
                 newest = g[:newest_processed]
-                min = oldest.positive? ? ((oldest.to_f / stats.max_global_seq) * 100) : 0
-                max = newest.positive? ? ((1 - (newest.to_f / stats.max_global_seq)) * 100) : 0
+                min = oldest.positive? ? ((oldest.to_f / stats.max_position) * 100) : 0
+                max = newest.positive? ? ((1 - (newest.to_f / stats.max_position)) * 100) : 0
                 g.merge(min:, max:)
               end
             end
@@ -74,8 +70,7 @@ module Sourced
               div(id: 'consumers', class: 'consumers') do
                 div(class: 'stream-container') do
                   div(class: 'stream-label') do
-                    strong { 'Global Event Stream' }
-                    small { " (#{@total_streams} streams)" }
+                    strong { 'Global Message Log' }
                   end
                   div(class: 'stream-bar global-stream') do
                     div(class: 'progress-marker', style: 'width: 100%') do
@@ -113,7 +108,7 @@ module Sourced
                         input(type: 'hidden', name: 'group_id', value: group[:group_id])
                         button(type: 'submit', class: 'btn btn-reset') { 'Reset' }
                       end
-                      small { " (#{group[:stream_count]} streams)" }
+                      small { " (#{group[:partition_count]} partitions)" }
                     end
                     div(class: 'stream-bar') do
                       div(class: 'lower-range', style: "width:#{group[:min]}%") do

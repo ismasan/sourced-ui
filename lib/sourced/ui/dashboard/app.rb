@@ -3,14 +3,13 @@
 require 'rack'
 require 'logger'
 require 'rack/static'
-require 'sourced'
+require 'sourced/ccc'
 require 'datastar'
 require 'sourced/ui/dashboard/components'
 require 'sourced/ui/dashboard/components/modal'
 require 'sourced/ui/dashboard/components/system_page'
-require 'sourced/ui/dashboard/components/stream_page'
+require 'sourced/ui/dashboard/components/message_page'
 require 'sourced/ui/dashboard/components/events_tree'
-require 'sourced/ui/dashboard/components/topology_page'
 
 module Sourced
   module UI
@@ -18,7 +17,6 @@ module Sourced
       ASSETS_DIR = File.expand_path("#{File.dirname(__FILE__)}/assets")
       HEADER_RULES = if ENV['SOURCED_UI_TESTING']
         [[:all, {"cache-control" => "no-cache, no-store, must-revalidate"}]].freeze
-        # [].freeze
       else
         [[:all, {"cache-control" => "private, max-age=86400"}]].freeze
       end
@@ -41,25 +39,26 @@ module Sourced
 
           case path
             when '/'
-              streams = Sourced.config.backend.recent_streams
+              store = Sourced::CCC.store
+              messages = store.read_all(limit: 20)
               phlex(Components::SystemPage.new(
-                stats: Sourced.config.backend.stats,
-                streams:
+                stats: store.stats,
+                messages:
               ))
             when '/updates'
-              stats = Sourced.config.backend.stats
+              store = Sourced::CCC.store
+              stats = store.stats
               datastar.stream do |sse|
                 while true
                   sleep 1
-                  streams = Sourced.config.backend.recent_streams
-                  sse.patch_elements Components::SystemPage::Streams.new(streams:)
+                  messages = store.read_all(limit: 20)
+                  sse.patch_elements Components::SystemPage::Messages.new(messages:)
                 end
               end
               datastar.stream do |sse|
                 while true
                   sleep 0.1
-                  new_stats = Sourced.config.backend.stats
-                  # Only stream updates to the UI if stats changed
+                  new_stats = store.stats
                   next unless stats != new_stats
 
                   stats = new_stats
@@ -68,58 +67,55 @@ module Sourced
               end
             when '/consumer-groups/resume' # POST
               group_id = request.params['group_id']
-              Sourced.config.backend.start_consumer_group(group_id)
+              Sourced::CCC.store.start_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
             when '/consumer-groups/stop' # POST
               group_id = request.params['group_id']
-              Sourced.config.backend.stop_consumer_group(group_id)
+              Sourced::CCC.store.stop_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
             when '/consumer-groups/reset' # POST
               group_id = request.params['group_id']
-              Sourced.config.backend.reset_consumer_group(group_id)
+              Sourced::CCC.store.reset_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
-            when /\/streams\/([^\/]*)\/(\d+)$/ # /streams/12343-re332/10
-              stream_id = Regexp.last_match(1)
-              seq = Regexp.last_match(2).to_i
-              events = Sourced.config.backend.read_stream(stream_id)
+            when /\/log\/(\d+)$/ # /log/42
+              position = Regexp.last_match(1).to_i
+              store = Sourced::CCC.store
+              # Fetch a window of messages around the requested position
+              messages = store.read_all(limit: 50)
 
               if datastar.sse?
                 datastar.stream do |sse|
                   sse.execute_script <<-JS
                     history.replaceState({}, '', '#{request.path}');
                   JS
-                  sse.patch_elements Components::StreamPage.new(
-                    stream_id:, 
-                    seq:,
-                    events:,
+                  sse.patch_elements Components::MessagePage.new(
+                    position:,
+                    messages:,
                     layout: false
                   )
                 end
               else
-                phlex Components::StreamPage.new(stream_id:, seq:, events:)
+                phlex Components::MessagePage.new(position:, messages:)
               end
-            when /\/streams\/([^\/]*)$/ # /streams/12343-re332
-              stream_id = Regexp.last_match(1)
-              events = Sourced.config.backend.read_stream(stream_id)
-              phlex Components::StreamPage.new(stream_id:, events:)
-            when /\/events\/([^\/]*)\/correlation$/ # /streams/12343-re332
+            when '/log' # /log or /log?from=N
+              from = (request.params['from'] || 0).to_i
+              store = Sourced::CCC.store
+              messages = store.read_all(from_position: from, limit: 50)
+              phlex Components::MessagePage.new(messages:)
+            when /\/events\/([^\/]*)\/correlation$/ # /events/uuid/correlation
               event_id = Regexp.last_match(1)
 
-              events = Sourced.config.backend.read_correlation_batch(event_id)
+              events = Sourced::CCC.store.read_correlation_batch(event_id)
               datastar.stream do |sse|
                 sse.patch_elements Components::Modal.new(
-                  title: 'Event correlation',
+                  title: 'Message correlation',
                   content: Components::EventsTree.new(events:, event_id:)
                 )
                 sse.patch_signals modal: true
               end
-            when '/topology'
-              phlex(Components::TopologyPage.new(topology: Sourced.topology.map(&:to_h)))
-            when '/reactors'
-              [200, {'Content-Type' => 'text/html'}, ["<h1>Reactors page!</h1>"]]
             else
               [404, {'Content-Type' => 'text/html'}, ["<h1>404 Not Found</h1><p>The page you requested does not exist.</p>"]]
           end

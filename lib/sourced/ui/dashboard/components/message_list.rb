@@ -7,35 +7,35 @@ module Sourced
   module UI
     module Dashboard
       module Components
-        class EventList < Component
-          def initialize(events:, seq: nil, reverse: true)
-            @events = events
-            @first_seq = @events.first&.seq
-            @last_seq = @events.last&.seq
-            @seq = seq || @last_seq
-            @events = @events.reverse if reverse
+        class MessageList < Component
+          def initialize(messages:, position: nil)
+            @messages = messages
+            @first_position = @messages.first&.position
+            @last_position = @messages.last&.position
+            @position = position || @last_position
           end
 
           def view_template
             div id: 'event-list' do
               div class: 'header' do
-                h2 { 'History' }
-                if @events.any?
-
-                  disabled_back = @first_seq == @seq
-                  disabled_forward = @last_seq == @seq
-
+                h2 { 'Messages' }
+                if @messages.any?
                   div(class: 'history-tools') do
                     span(class: 'pagination') do
+                      prev_pos = @position ? @position - 1 : nil
+                      next_pos = @position ? @position + 1 : nil
+                      disabled_back = @first_position == @position
+                      disabled_forward = @last_position == @position
+
                       button(disabled: disabled_back,
-                        data: _d.on.click.get(helpers.url("/streams/#{@events.first.stream_id}/#{@seq - 1}")).to_h) do
+                        data: _d.on.click.get(helpers.url("/log/#{prev_pos}")).to_h) do
                         safe('&larr;')
                       end
                       button(disabled: disabled_forward,
-                        data: _d.on.click.get(helpers.url("/streams/#{@events.first.stream_id}/#{@seq + 1}")).to_h) do
+                        data: _d.on.click.get(helpers.url("/log/#{next_pos}")).to_h) do
                         safe('&rarr;')
                       end
-                      small { "sequence: #{@seq} " }
+                      small { "position: #{@position} " }
                     end
 
                     div(class: 'switches') do
@@ -47,11 +47,11 @@ module Sourced
                 end
               end
               div class: 'list' do
-                @events.each do |event|
+                @messages.reverse_each do |msg|
                   MessageRow(
-                    event,
-                    highlighted: (event.seq == @seq),
-                    href: helpers.url("/streams/#{event.stream_id}/#{event.seq}")
+                    msg,
+                    highlighted: (msg.position == @position),
+                    href: helpers.url("/log/#{msg.position}")
                   )
                 end
               end

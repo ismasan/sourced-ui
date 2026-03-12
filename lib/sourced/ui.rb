@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'sourced'
+require 'sourced/ccc'
 require 'datastar'
 require_relative "ui/version"
 
@@ -14,10 +15,10 @@ module Sourced
     # which includes the expected input names and _cid value.
     # @example
     #   Sourced::UI.streaming_command_errors(cmd, datastar) do |cmd|
-    #     Sourced.schedule_commands([cmd])
+    #     Sourced::CCC.handle!(MyDecider, cmd)
     #   end
     #
-    # @param cmd [Sourced::Command] the command to process
+    # @param cmd [Sourced::CCC::Command] the command to process
     # @param datastar [Datastar::Dispatcher] the datastar instance to stream errors to
     def self.streaming_command_errors(cmd, datastar, &)
       if cmd.valid? # <== schedule valid command for processing
@@ -39,22 +40,6 @@ module Sourced
       else # <== This should never happen
         raise Sourced::UI::Error, "Command #{cmd.type} is invalid: #{cmd.errors}"
       end
-    end
-
-    def self.configure_from(sourced_config)
-      case sourced_config.executor
-      when Sourced::AsyncExecutor
-        require 'datastar/async_executor'
-        Datastar.config.executor = Datastar::AsyncExecutor.new
-        Sourced.config.logger.info "Configuring Datastar with AsyncExecutor"
-      when Sourced::ThreadExecutor
-        Datastar.config.executor = Datastar::ThreadExecutor.new
-        Sourced.config.logger.info "Configuring Datastar with ThreadExecutor"
-      end
-    end
-
-    Sourced.config.subscribe do |config|
-      configure_from(config)
     end
   end
 end

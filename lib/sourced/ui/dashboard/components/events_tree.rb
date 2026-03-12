@@ -48,8 +48,8 @@ module Sourced
             code { "[#{event.metadata[:producer]}] " } if event.metadata[:producer]
           end
 
-          private def is_command?(event)
-            event.id == event.causation_id
+          private def is_command?(message)
+            message.is_a?(Sourced::CCC::Message::Command)
           end
         end
       end

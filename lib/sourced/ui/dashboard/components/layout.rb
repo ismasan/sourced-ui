@@ -37,11 +37,8 @@ module Sourced
                   end
 
                   div class: 'link-group dashboard' do
-                    Sourced::UI::Dashboard.configuration.header_links.each do |link|
-                      a(href: helpers.url('/')) { 'System' }
-                      a(href: helpers.url('/reactors'))  { 'Reactors' }
-                      a(href: helpers.url('/topology'))  { 'Topology' }
-                    end
+                    a(href: helpers.url('/')) { 'System' }
+                    a(href: helpers.url('/log')) { 'Log' }
                   end
                 end
 
