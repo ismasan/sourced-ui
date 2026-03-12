@@ -293,7 +293,8 @@ h2 {
 /* Card treatment for individual consumer groups */
 .consumer-active,
 .consumer-retrying,
-.consumer-stopped {
+.consumer-stopped,
+.consumer-failed {
   background: var(--slate-50);
   border: 1px solid var(--slate-200);
   border-radius: 8px;
@@ -338,6 +339,34 @@ h2 {
   .status {
     color: var(--red-700);
     background: var(--red-100);
+  }
+}
+
+.consumer-failed {
+  background: var(--red-100);
+  border-color: var(--red-400);
+  .stream-bar {
+    border: solid 1px var(--red-400);
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        transparent 0px,
+        transparent 6px,
+        var(--red-300) 6px,
+        var(--red-300) 7px
+      ),
+      var(--red-100);
+  }
+  .status {
+    color: #fff;
+    background: var(--red-700);
+  }
+  .error-context {
+    display: block;
+    color: var(--red-700);
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 12px;
+    margin-top: 0.25rem;
   }
 }
 

@@ -92,7 +92,7 @@ module Sourced
                           end
                         end
                       end
-                      if group[:status] == 'stopped'
+                      if group[:status] == 'stopped' || group[:status] == 'failed'
                         form(data: _d.on.submit.post(helpers.url('/consumer-groups/resume'), content_type: 'form').to_h) do
                           input(type: 'hidden', name: 'group_id', value: group[:group_id])
                           button(type: 'submit', class: 'btn btn-resume') { 'Resume' }
@@ -109,6 +109,14 @@ module Sourced
                         button(type: 'submit', class: 'btn btn-reset') { 'Reset' }
                       end
                       small { " (#{group[:partition_count]} partitions)" }
+                      if group[:status] == 'failed' && group[:error_context]&.any?
+                        small(class: 'error-context') do
+                          ctx = group[:error_context]
+                          if ctx[:exception_class]
+                            span { "#{ctx[:exception_class]}: #{ctx[:exception_message]}" }
+                          end
+                        end
+                      end
                     end
                     div(class: 'stream-bar') do
                       div(class: 'lower-range', style: "width:#{group[:min]}%") do

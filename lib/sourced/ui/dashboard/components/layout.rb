@@ -39,6 +39,7 @@ module Sourced
                   div class: 'link-group dashboard' do
                     a(href: helpers.url('/')) { 'System' }
                     a(href: helpers.url('/log')) { 'Log' }
+                    a(href: helpers.url('/topology')) { 'Topology' }
                   end
                 end
 

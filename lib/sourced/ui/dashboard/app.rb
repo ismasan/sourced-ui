@@ -10,6 +10,7 @@ require 'sourced/ui/dashboard/components/modal'
 require 'sourced/ui/dashboard/components/system_page'
 require 'sourced/ui/dashboard/components/message_page'
 require 'sourced/ui/dashboard/components/events_tree'
+require 'sourced/ui/dashboard/components/topology_page'
 
 module Sourced
   module UI
@@ -116,6 +117,8 @@ module Sourced
                 )
                 sse.patch_signals modal: true
               end
+            when '/topology'
+              phlex(Components::TopologyPage.new(topology: Sourced::CCC.topology.map(&:to_h)))
             else
               [404, {'Content-Type' => 'text/html'}, ["<h1>404 Not Found</h1><p>The page you requested does not exist.</p>"]]
           end
