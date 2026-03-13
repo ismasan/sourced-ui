@@ -41,7 +41,7 @@ module Sourced
           case path
             when '/'
               store = Sourced::CCC.store
-              messages = store.read_all(limit: 20)
+              messages = store.read_all(limit: 20, order: :desc)
               phlex(Components::SystemPage.new(
                 stats: store.stats,
                 messages:
@@ -52,7 +52,7 @@ module Sourced
               datastar.stream do |sse|
                 while true
                   sleep 1
-                  messages = store.read_all(limit: 20)
+                  messages = store.read_all(limit: 20, order: :desc)
                   sse.patch_elements Components::SystemPage::Messages.new(messages:)
                 end
               end
