@@ -8,10 +8,10 @@ module Sourced
     module Dashboard
       module Components
         class MessageList < Component
-          def initialize(messages:, position: nil, last_position: nil)
-            @messages = messages
+          def initialize(messages:, position: nil)
+            @last_position = messages.last_position
+            @messages = messages.messages
             @first_position = @messages.first&.position
-            @last_position = last_position || @messages.last&.position
             @position = position || @last_position
           end
 

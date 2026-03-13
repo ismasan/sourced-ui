@@ -8,13 +8,12 @@ module Sourced
     module Dashboard
       module Components
         class MessagePage < Component
-          def initialize(messages: [], position: nil, last_position: nil, layout: true)
+          def initialize(messages: [], position: nil, layout: true)
             @messages = messages
-            @last_position = last_position
             @current_message = if position
-              messages.find { |m| m.position == position }
+              messages.messages.find { |m| m.position == position }
             else
-              messages.last
+              messages.messages.last
             end
             @layout = layout
           end
@@ -68,7 +67,7 @@ module Sourced
               end
 
               div id: 'sidebar' do
-                MessageList(messages: @messages, position: @current_message&.position, last_position: @last_position)
+                MessageList(messages: @messages, position: @current_message&.position)
               end
             end
           end

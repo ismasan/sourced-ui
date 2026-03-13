@@ -41,10 +41,10 @@ module Sourced
           case path
             when '/'
               store = Sourced::CCC.store
-              result = store.read_all(limit: 20, order: :desc)
+              messages = store.read_all(limit: 20, order: :desc)
               phlex(Components::SystemPage.new(
                 stats: store.stats,
-                messages: result.messages
+                messages:
               ))
             when '/updates'
               store = Sourced::CCC.store
@@ -52,8 +52,8 @@ module Sourced
               datastar.stream do |sse|
                 while true
                   sleep 1
-                  result = store.read_all(limit: 20, order: :desc)
-                  sse.patch_elements Components::SystemPage::Messages.new(messages: result.messages)
+                  messages = store.read_all(limit: 20, order: :desc)
+                  sse.patch_elements Components::SystemPage::Messages.new(messages:)
                 end
               end
               datastar.stream do |sse|
@@ -85,7 +85,7 @@ module Sourced
               position = Regexp.last_match(1).to_i
               store = Sourced::CCC.store
               # Fetch a window of messages around the requested position
-              result = store.read_all(limit: 50)
+              messages = store.read_all(from_position: position, limit: 50, order: :desc)
 
               if datastar.sse?
                 datastar.stream do |sse|
@@ -94,19 +94,18 @@ module Sourced
                   JS
                   sse.patch_elements Components::MessagePage.new(
                     position:,
-                    messages: result.messages,
-                    last_position: result.last_position,
+                    messages:,
                     layout: false
                   )
                 end
               else
-                phlex Components::MessagePage.new(position:, messages: result.messages, last_position: result.last_position)
+                phlex Components::MessagePage.new(position:, messages:)
               end
             when '/log' # /log or /log?from=N
               from = (request.params['from'] || 0).to_i
               store = Sourced::CCC.store
-              result = store.read_all(from_position: from, limit: 50)
-              phlex Components::MessagePage.new(messages: result.messages, last_position: result.last_position)
+              messages = store.read_all(from_position: from, limit: 50, order: :desc)
+              phlex Components::MessagePage.new(messages:)
             when /\/events\/([^\/]*)\/correlation$/ # /events/uuid/correlation
               event_id = Regexp.last_match(1)
 

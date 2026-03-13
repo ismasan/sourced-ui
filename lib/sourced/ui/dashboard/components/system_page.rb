@@ -31,14 +31,14 @@ module Sourced
 
           class Messages < Component
             def initialize(messages:)
-              @messages = messages
+              @messages = messages.messages
             end
 
             def view_template
               div(id: 'messages') do
                 h2 { 'Recent messages' }
                 ul(class: 'streams-list') do
-                  @messages.reverse_each do |msg|
+                  @messages.each do |msg|
                     li do
                       h5 do
                         span(class: 'seq') { msg.position }
