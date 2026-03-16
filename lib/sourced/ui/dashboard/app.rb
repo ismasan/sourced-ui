@@ -68,17 +68,17 @@ module Sourced
               end
             when '/consumer-groups/resume' # POST
               group_id = request.params['group_id']
-              Sourced::CCC.store.start_consumer_group(group_id)
+              Sourced::CCC.start_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
             when '/consumer-groups/stop' # POST
               group_id = request.params['group_id']
-              Sourced::CCC.store.stop_consumer_group(group_id)
+              Sourced::CCC.stop_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
             when '/consumer-groups/reset' # POST
               group_id = request.params['group_id']
-              Sourced::CCC.store.reset_consumer_group(group_id)
+              Sourced::CCC.reset_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
             when /\/log\/(\d+)$/ # /log/42
