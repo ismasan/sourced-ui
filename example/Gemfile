@@ -1,0 +1,9 @@
+source 'https://rubygems.org'
+
+# gem 'sourced', path: '/Users/ismasan/code/personal/gems/sourced'
+gem 'sourced', github: 'ismasan/sourced', branch: 'ccc'
+gem 'sourced-ui', path: '..'
+gem 'sequel'
+gem 'sqlite3'
+gem 'falcon'
+gem 'datastar'
