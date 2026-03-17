@@ -56,7 +56,7 @@ module Sourced
                 while true
                   sleep 1
                   messages = store.read_all(limit: per_page, order: :desc)
-                  sse.patch_elements Components::SystemPage::Messages.new(messages:)
+                  sse.patch_elements Components::MessageList.recent(messages:)
                 end
               end
               datastar.stream do |sse|
@@ -104,9 +104,10 @@ module Sourced
               else
                 phlex Components::MessagePage.new(position:, messages:)
               end
-            when '/log' # /log or /log?from=N
+            when '/log'
               from = (request.params['from'] || 1).to_i
               messages = store.read_all(from_position: from, limit: per_page)
+              phlex Components::MessagePage.new(position: from, messages:)
 
             when '/log/more'
               from = datastar.signals['offset'].to_i + 1

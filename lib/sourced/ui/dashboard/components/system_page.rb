@@ -20,7 +20,7 @@ module Sourced
                   render Consumers.new(stats: @stats)
                 end
                 div id: 'sidebar' do
-                  render Messages.new(messages: @messages)
+                  render Components::MessageList.recent(messages: @messages)
                 end
               end
 
