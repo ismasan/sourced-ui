@@ -9,36 +9,49 @@
 require_relative 'domain'
 require 'securerandom'
 
-TASKS = [
-  { title: 'Design landing page' },
-  { title: 'Set up CI pipeline' },
-  { title: 'Write API documentation' },
-  { title: 'Implement auth middleware' },
-  { title: 'Add search indexing' },
-]
+TASK_COUNT = (ENV['TASK_COUNT'] || 1000).to_i
 
-puts "Seeding #{TASKS.size} tasks..."
+ADJECTIVES = %w[urgent important optional deferred critical blocked pending reviewed approved draft].freeze
+NOUNS = %w[
+  landing-page CI-pipeline API-docs auth-middleware search-indexing
+  database-migration email-notifications rate-limiter caching-layer
+  user-dashboard payment-integration test-suite logging-setup
+  deploy-script monitoring-alerts backup-strategy data-export
+  onboarding-flow error-handling access-control webhook-handler
+].freeze
 
-task_ids = TASKS.map do |attrs|
+def random_title(index)
+  "#{ADJECTIVES.sample} #{NOUNS.sample} ##{index}"
+end
+
+puts "Seeding #{TASK_COUNT} tasks..."
+
+task_ids = TASK_COUNT.times.map do |i|
   task_id = SecureRandom.uuid
 
   cmd = TaskApp::CreateTask.new(
-    payload: { task_id: task_id, title: attrs[:title] }
+    payload: { task_id: task_id, title: random_title(i + 1) }
   )
   _cmd, _decider, events = CCC.handle!(TaskApp::TaskDecider, cmd)
 
-  puts "  Created: #{attrs[:title]} (#{task_id}) -> #{events.map(&:type).join(', ')}"
+  print "\r  Created #{i + 1}/#{TASK_COUNT}"
   task_id
 end
+puts
 
-# Complete the first 3 tasks
-task_ids.first(3).each do |task_id|
+# Complete ~60% of tasks
+complete_count = (TASK_COUNT * 0.6).to_i
+to_complete = task_ids.sample(complete_count)
+
+to_complete.each_with_index do |task_id, i|
   cmd = TaskApp::CompleteTask.new(
     payload: { task_id: task_id }
   )
   _cmd, _decider, events = CCC.handle!(TaskApp::TaskDecider, cmd)
 
-  puts "  Completed: #{task_id} -> #{events.map(&:type).join(', ')}"
+  print "\r  Completed #{i + 1}/#{complete_count}"
 end
+puts
 
-puts "Done. #{TASKS.size} tasks created, 3 completed."
+total_messages = TASK_COUNT + complete_count
+puts "Done. #{TASK_COUNT} tasks created, #{complete_count} completed. ~#{total_messages * 2} messages (commands + events)."
