@@ -1,12 +1,3 @@
-GIT
-  remote: https://github.com/ismasan/sourced.git
-  revision: 935c0a57d93bf44dc012d0aa1a55b6ace8b68f46
-  branch: ccc
-  specs:
-    sourced (0.0.1)
-      async
-      plumb (>= 0.0.17)
-
 PATH
   remote: ..
   specs:
@@ -16,6 +7,13 @@ PATH
       phlex
       rack
       sourced
+
+PATH
+  remote: /Users/ismasan/code/personal/gems/sourced
+  specs:
+    sourced (0.0.1)
+      async
+      plumb (>= 0.0.17)
 
 GEM
   remote: https://rubygems.org/

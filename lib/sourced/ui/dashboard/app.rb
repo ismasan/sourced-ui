@@ -38,21 +38,23 @@ module Sourced
           path = request.path_info
           path = '/' if path.empty?
 
+          store = CCC.store
+          per_page = 50
+
           case path
             when '/'
               store = Sourced::CCC.store
-              messages = store.read_all(limit: 20, order: :desc)
+              messages = store.read_all(limit: per_page, order: :desc)
               phlex(Components::SystemPage.new(
                 stats: store.stats,
                 messages:
               ))
             when '/updates'
-              store = Sourced::CCC.store
               stats = store.stats
               datastar.stream do |sse|
                 while true
                   sleep 1
-                  messages = store.read_all(limit: 20, order: :desc)
+                  messages = store.read_all(limit: per_page, order: :desc)
                   sse.patch_elements Components::SystemPage::Messages.new(messages:)
                 end
               end
@@ -83,9 +85,9 @@ module Sourced
               [204, {'Content-Type' => 'text/html'}, []]
             when /\/log\/(\d+)$/ # /log/42
               position = Regexp.last_match(1).to_i
-              store = Sourced::CCC.store
-              # Fetch a window of messages around the requested position
-              messages = store.read_all(from_position: position, limit: 50, order: :desc)
+              # Fetch the 50-item page that contains the requested position
+              page_start = ((position - 1) / per_page) * per_page + 1
+              messages = store.read_all(from_position: page_start, limit: per_page)
 
               if datastar.sse?
                 datastar.stream do |sse|
@@ -102,10 +104,48 @@ module Sourced
                 phlex Components::MessagePage.new(position:, messages:)
               end
             when '/log' # /log or /log?from=N
-              from = (request.params['from'] || 0).to_i
-              store = Sourced::CCC.store
-              messages = store.read_all(from_position: from, limit: 50, order: :desc)
-              phlex Components::MessagePage.new(messages:)
+              from = (request.params['from'] || 1).to_i
+              messages = store.read_all(from_position: from, limit: per_page)
+
+              if datastar.sse? # infinite scroll
+                datastar.patch_elements Components::MessageList.new(messages:, position: from)
+                # datastar.stream do |sse|
+                #   messages.each do |m|
+                #     sse.patch_elements(
+                #       Components::MessageRow.new(m, href: "/log/#{m.position}"),
+                #       selector: '#messages-page',
+                #       mode: 'append'
+                #     )
+                #   end
+                # end
+              else
+                phlex Components::MessagePage.new(messages:)
+              end
+
+            when '/log/more' # /log or /log?from=N
+              Console.info "AAA #{datastar.signals.inspect}"
+              from = datastar.signals['offset'].to_i + 1
+              messages = store.read_all(from_position: from, limit: per_page)
+              if from < messages.last_position
+                datastar.stream do |sse|
+                  sse.patch_signals(offset: messages.messages.last.position)
+                  messages.each do |m|
+                    sse.patch_elements(
+                      Components::MessageRow.new(m, href: "/log/#{m.position}"),
+                      selector: '#messages-page',
+                      mode: 'append'
+                    )
+                  end
+                  # sse.patch_elements(
+                  #   %(<div data-on-intersect="console.log(11)">...</div>),
+                  #   selector: '#messages-page',
+                  #   mode: 'append'
+                  # )
+                end
+              else
+                [204, {}, []]
+              end
+
             when /\/events\/([^\/]*)\/correlation$/ # /events/uuid/correlation
               event_id = Regexp.last_match(1)
 

@@ -10,8 +10,8 @@ module Sourced
         class MessageList < Component
           def initialize(messages:, position: nil)
             @last_position = messages.last_position
-            @messages = messages.messages
-            @first_position = @messages.first&.position
+            @messages = messages
+            @first_position = @messages.messages.first&.position
             @position = position || @last_position
           end
 
@@ -47,12 +47,18 @@ module Sourced
                 end
               end
               div class: 'list' do
-                @messages.reverse_each do |msg|
-                  MessageRow(
-                    msg,
-                    highlighted: (msg.position == @position),
-                    href: helpers.url("/log/#{msg.position}")
-                  )
+                div id: 'messages-page' do
+                  @messages.each do |msg|
+                    MessageRow(
+                      msg,
+                      highlighted: (msg.position == @position),
+                      href: helpers.url("/log/#{msg.position}")
+                    )
+                  end
+                end
+                last_local_position = @messages.messages.last&.position&.to_i
+                div(data: {'signals' => JSON.dump(offset: last_local_position), 'on-intersect' => %(@get('/log/more'))}) do
+                  small { 'loading...' }
                 end
               end
             end

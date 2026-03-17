@@ -8,12 +8,12 @@ module Sourced
     module Dashboard
       module Components
         class MessagePage < Component
-          def initialize(messages: [], position: nil, layout: true)
+          def initialize(messages:, position: nil, layout: true)
             @messages = messages
             @current_message = if position
               messages.messages.find { |m| m.position == position }
             else
-              messages.messages.last
+              messages.messages.first
             end
             @layout = layout
           end
