@@ -40,6 +40,7 @@ module Sourced
                     a(href: helpers.url('/')) { 'System' }
                     a(href: helpers.url('/log')) { 'Log' }
                     a(href: helpers.url('/topology')) { 'Topology' }
+                    a(href: helpers.url('/offsets')) { 'Offsets' }
                   end
                 end
 
