@@ -11,6 +11,7 @@ require 'sourced/ui/dashboard/components/system_page'
 require 'sourced/ui/dashboard/components/message_page'
 require 'sourced/ui/dashboard/components/events_tree'
 require 'sourced/ui/dashboard/components/topology_page'
+require 'sourced/ui/dashboard/components/offsets_page'
 
 module Sourced
   module UI
@@ -107,23 +108,7 @@ module Sourced
               from = (request.params['from'] || 1).to_i
               messages = store.read_all(from_position: from, limit: per_page)
 
-              if datastar.sse? # infinite scroll
-                datastar.patch_elements Components::MessageList.new(messages:, position: from)
-                # datastar.stream do |sse|
-                #   messages.each do |m|
-                #     sse.patch_elements(
-                #       Components::MessageRow.new(m, href: "/log/#{m.position}"),
-                #       selector: '#messages-page',
-                #       mode: 'append'
-                #     )
-                #   end
-                # end
-              else
-                phlex Components::MessagePage.new(messages:)
-              end
-
-            when '/log/more' # /log or /log?from=N
-              Console.info "AAA #{datastar.signals.inspect}"
+            when '/log/more'
               from = datastar.signals['offset'].to_i + 1
               messages = store.read_all(from_position: from, limit: per_page)
               if from < messages.last_position
@@ -136,11 +121,6 @@ module Sourced
                       mode: 'append'
                     )
                   end
-                  # sse.patch_elements(
-                  #   %(<div data-on-intersect="console.log(11)">...</div>),
-                  #   selector: '#messages-page',
-                  #   mode: 'append'
-                  # )
                 end
               else
                 [204, {}, []]
@@ -157,6 +137,12 @@ module Sourced
                 )
                 sse.patch_signals modal: true
               end
+            when '/offsets'
+              from_id = request.params['from_id']&.to_i
+              group_id = request.params['group_id']&.then { |v| v.empty? ? nil : v }
+              groups = store.stats.groups
+              result = store.read_offsets(limit: per_page, from_id: from_id, group_id: group_id)
+              phlex(Components::OffsetsPage.new(result:, groups:, selected_group: group_id))
             when '/topology'
               phlex(Components::TopologyPage.new(topology: Sourced::CCC.topology.map(&:to_h)))
             else
