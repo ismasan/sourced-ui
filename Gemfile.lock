@@ -2,7 +2,7 @@ PATH
   remote: .
   specs:
     sourced-ui (0.1.0)
-      datastar (= 1.0.1)
+      datastar (= 1.0.2)
       logger
       phlex
       rack
@@ -30,10 +30,10 @@ GEM
       fiber-annotation
       fiber-local (~> 1.1)
       json
-    datastar (1.0.1)
+    datastar (1.0.2)
       json
       logger
-      rack (>= 3.1.14)
+      rack (>= 3.2)
     date (3.4.1)
     debug (1.11.0)
       irb (~> 1.10)
