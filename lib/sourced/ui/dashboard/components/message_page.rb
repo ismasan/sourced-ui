@@ -38,7 +38,7 @@ module Sourced
                 render Sourced::UI::Components::MessageFilter.new(
                   filters: @filters,
                   action: helpers.url('/log/filters/add'),
-                  submit: helpers.url('/log/filters/apply')
+                  submit: helpers.url('/log')
                 )
 
                 if @current_message

@@ -18,7 +18,7 @@ module Sourced
         # @param filters [Array<FilterEntry>, Array<Hash>] list of filter entries
         # @param available [Enumerator, Array] message classes available to add (for the dropdown)
         # @param action [String, nil] URL to POST to when "Add" is clicked (enables Datastar interaction)
-        # @param submit [String, nil] URL to POST to when "Apply" is clicked
+        # @param submit [String, nil] form action URL for GET submit
         def initialize(filters: [], available: Sourced::CCC::Message.registry.all, action: nil, submit: nil)
           @filters = Types::Filters.parse(filters)
           @available = available.to_a
@@ -28,7 +28,7 @@ module Sourced
 
         def view_template
           div(id: 'message-filter') do
-          form do
+          form(action: @submit, method: 'get') do
             @filters.each_with_index do |entry, index|
               hr if index > 0
               filter_row(index, entry)
@@ -52,7 +52,7 @@ module Sourced
 
             if @filters.any? && @submit
               div(class: 'message-filter__submit') do
-                button(type: 'button', data: _d.click.post(@submit, content_type: 'form').to_h) { 'Apply filters' }
+                button(type: 'submit') { 'Apply filters' }
               end
             end
           end

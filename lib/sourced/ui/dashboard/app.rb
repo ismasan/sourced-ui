@@ -94,19 +94,7 @@ module Sourced
                 sse.patch_elements Sourced::UI::Components::MessageFilter.new(
                   filters: filters,
                   action: view_context.url('/log/filters/add'),
-                  submit: view_context.url('/log/filters/apply')
-                )
-              end
-
-            when '/log/filters/apply' # POST
-              filters = parse_filter_params(request.params)
-              conditions = filters_to_conditions(filters)
-              messages = store.read_all(conditions: conditions, limit: per_page)
-              datastar.stream do |sse|
-                sse.patch_elements Components::MessagePage.new(
-                  messages: messages,
-                  filters: filters,
-                  layout: false
+                  submit: view_context.url('/log')
                 )
               end
 
@@ -132,8 +120,10 @@ module Sourced
               end
             when '/log'
               from = (request.params['from'] || 1).to_i
-              messages = store.read_all(from_position: from, limit: per_page)
-              phlex Components::MessagePage.new(position: from, messages:)
+              filters = parse_filter_params(request.params)
+              conditions = filters_to_conditions(filters)
+              messages = store.read_all(from_position: from, conditions: conditions, limit: per_page)
+              phlex Components::MessagePage.new(position: from, messages:, filters: filters)
 
             when '/log/more'
               from = datastar.signals['offset'].to_i + 1

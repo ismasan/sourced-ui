@@ -163,15 +163,25 @@ RSpec.describe Sourced::UI::Components::MessageFilter do
   end
 
   describe 'submit button' do
+    it 'renders a GET form with the submit URL as action' do
+      filters = [filter_entry(FilterTestEvent)]
+      html = render(described_class.new(filters:, submit: '/log'))
+      doc = parse(html)
+
+      form = doc.at_css('form')
+      expect(form['action']).to eq('/log')
+      expect(form['method']).to eq('get')
+    end
+
     it 'renders apply button when filters and submit URL are present' do
       filters = [filter_entry(FilterTestEvent)]
-      html = render(described_class.new(filters:, submit: '/log/filters/apply'))
+      html = render(described_class.new(filters:, submit: '/log'))
       doc = parse(html)
 
       button = doc.at_css('.message-filter__submit button')
       expect(button).not_to be_nil
       expect(button.text).to eq('Apply filters')
-      expect(button['data-on:click']).to include("@post('/log/filters/apply'")
+      expect(button['type']).to eq('submit')
     end
 
     it 'does not render apply button when no filters' do
