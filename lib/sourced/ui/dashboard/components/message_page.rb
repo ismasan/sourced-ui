@@ -2,13 +2,14 @@
 
 require 'sourced/ui/dashboard/components/layout'
 require 'sourced/ui/dashboard/components/message_list'
+require 'sourced/ui/components'
 
 module Sourced
   module UI
     module Dashboard
       module Components
         class MessagePage < Component
-          def initialize(messages:, position: nil, layout: true)
+          def initialize(messages:, position: nil, layout: true, filters: {})
             @messages = messages
             @current_message = if position
               messages.messages.find { |m| m.position == position }
@@ -16,6 +17,7 @@ module Sourced
               messages.messages.first
             end
             @layout = layout
+            @filters = filters
           end
 
           private def switch_layout(**kargs, &)
@@ -32,6 +34,8 @@ module Sourced
             switch_layout(title: "log position: #{@current_message&.position}") do
               div id: 'main', data: _d.signals(showPayloads: false).to_h do
                 h1 { 'Global Message Log' }
+
+                render Sourced::UI::Components::MessageFilter.new(filters: @filters)
 
                 if @current_message
                   h4 { 'Current message' }

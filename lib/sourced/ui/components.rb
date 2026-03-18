@@ -12,3 +12,4 @@ end
 
 require_relative 'components/component'
 require_relative 'components/command'
+require_relative 'components/message_filter'
