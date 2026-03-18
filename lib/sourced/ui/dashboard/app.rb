@@ -84,6 +84,32 @@ module Sourced
               Sourced::CCC.reset_consumer_group(group_id)
 
               [204, {'Content-Type' => 'text/html'}, []]
+            when '/log/filters/add' # POST
+              filters = parse_filter_params(request.params)
+              add_filter = request.params['add_filter']
+              if add_filter
+                filters << { type: add_filter, attributes: {} }
+              end
+              datastar.stream do |sse|
+                sse.patch_elements Sourced::UI::Components::MessageFilter.new(
+                  filters: filters,
+                  action: view_context.url('/log/filters/add'),
+                  submit: view_context.url('/log/filters/apply')
+                )
+              end
+
+            when '/log/filters/apply' # POST
+              filters = parse_filter_params(request.params)
+              conditions = filters_to_conditions(filters)
+              messages = store.read_all(conditions: conditions, limit: per_page)
+              datastar.stream do |sse|
+                sse.patch_elements Components::MessagePage.new(
+                  messages: messages,
+                  filters: filters,
+                  layout: false
+                )
+              end
+
             when /\/log\/(\d+)$/ # /log/42
               position = Regexp.last_match(1).to_i
               # Fetch the 50-item page that contains the requested position
@@ -163,6 +189,21 @@ module Sourced
 
         def view_context
           @view_context ||= Components::Component::Helpers.new(request:)
+        end
+
+        def parse_filter_params(params)
+          (params['filters'] || {}).values.map { |f|
+            { type: f['type'], attributes: f['attributes'] || {} }
+          }
+        end
+
+        def filters_to_conditions(filters)
+          parsed = Sourced::UI::Components::Types::Filters.parse(filters)
+          parsed.flat_map { |entry|
+            attrs = entry[:attributes].reject { |_, v| v.nil? || v.empty? }
+            next [] if attrs.empty?
+            entry[:type].to_conditions(**attrs.transform_keys(&:to_sym))
+          }
         end
       end
 

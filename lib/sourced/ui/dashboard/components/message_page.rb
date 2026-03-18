@@ -9,7 +9,7 @@ module Sourced
     module Dashboard
       module Components
         class MessagePage < Component
-          def initialize(messages:, position: nil, layout: true, filters: {})
+          def initialize(messages:, position: nil, layout: true, filters: [])
             @messages = messages
             @current_message = if position
               messages.messages.find { |m| m.position == position }
@@ -35,7 +35,11 @@ module Sourced
               div id: 'main', data: _d.signals(showPayloads: false).to_h do
                 h1 { 'Global Message Log' }
 
-                render Sourced::UI::Components::MessageFilter.new(filters: @filters)
+                render Sourced::UI::Components::MessageFilter.new(
+                  filters: @filters,
+                  action: helpers.url('/log/filters/add'),
+                  submit: helpers.url('/log/filters/apply')
+                )
 
                 if @current_message
                   h4 { 'Current message' }
@@ -71,7 +75,7 @@ module Sourced
               end
 
               div id: 'sidebar' do
-                MessageList(messages: @messages, position: @current_message&.position)
+                MessageList(messages: @messages, position: @current_message&.position, navigation: @filters.empty?)
               end
             end
           end
