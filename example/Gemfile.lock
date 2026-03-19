@@ -6,6 +6,7 @@ PATH
       logger
       phlex
       rack
+      rack-session
       sourced
 
 PATH
@@ -47,6 +48,7 @@ GEM
       string-format (~> 0.2)
     async-utilization (0.3.2)
       console (~> 1.0)
+    base64 (0.3.0)
     bigdecimal (4.0.1)
     concurrent-ruby (1.3.6)
     console (1.34.3)
@@ -117,6 +119,9 @@ GEM
       date
       stringio
     rack (3.2.5)
+    rack-session (2.1.1)
+      base64 (>= 0.1.0)
+      rack (>= 3.0.0)
     rdoc (7.2.0)
       erb
       psych (>= 4.0.0)
@@ -131,16 +136,7 @@ GEM
       mapping (~> 1.0)
     sequel (5.102.0)
       bigdecimal
-    sqlite3 (2.9.2-aarch64-linux-gnu)
-    sqlite3 (2.9.2-aarch64-linux-musl)
-    sqlite3 (2.9.2-arm-linux-gnu)
-    sqlite3 (2.9.2-arm-linux-musl)
     sqlite3 (2.9.2-arm64-darwin)
-    sqlite3 (2.9.2-x86-linux-gnu)
-    sqlite3 (2.9.2-x86-linux-musl)
-    sqlite3 (2.9.2-x86_64-darwin)
-    sqlite3 (2.9.2-x86_64-linux-gnu)
-    sqlite3 (2.9.2-x86_64-linux-musl)
     string-format (0.2.0)
     stringio (3.2.0)
     traces (0.18.2)
@@ -148,16 +144,7 @@ GEM
     zeitwerk (2.7.5)
 
 PLATFORMS
-  aarch64-linux-gnu
-  aarch64-linux-musl
-  arm-linux-gnu
-  arm-linux-musl
   arm64-darwin
-  x86-linux-gnu
-  x86-linux-musl
-  x86_64-darwin
-  x86_64-linux-gnu
-  x86_64-linux-musl
 
 DEPENDENCIES
   datastar
@@ -176,6 +163,7 @@ CHECKSUMS
   async-pool (0.11.2) sha256=0a43a17b02b04d9c451b7d12fafa9a50e55dc6dd00d4369aca00433f16a7e3ed
   async-service (0.21.0) sha256=3bc9e0f8dc293ba8855bc790959db7f981ae22bbb731456d221d93b388e9706f
   async-utilization (0.3.2) sha256=201a27e0948fe23fc14a01a0ecbe5e420e27cebae3a51f36e56fc45fb31df3b4
+  base64 (0.3.0)
   bigdecimal (4.0.1) sha256=8b07d3d065a9f921c80ceaea7c9d4ae596697295b584c296fe599dd0ad01c4a7
   concurrent-ruby (1.3.6) sha256=6b56837e1e7e5292f9864f34b69c5a2cbc75c0cf5338f1ce9903d10fa762d5ab
   console (1.34.3) sha256=869fbd74697efc4c606f102d2812b0b008e4e7fd738a91c591e8577140ec0dcc
@@ -210,6 +198,7 @@ CHECKSUMS
   protocol-url (0.4.0) sha256=64d4c03b6b51ad815ac6fdaf77a1d91e5baf9220d26becb846c5459dacdea9e1
   psych (5.3.1) sha256=eb7a57cef10c9d70173ff74e739d843ac3b2c019a003de48447b2963d81b1974
   rack (3.2.5) sha256=4cbd0974c0b79f7a139b4812004a62e4c60b145cba76422e288ee670601ed6d3
+  rack-session (2.1.1)
   rdoc (7.2.0) sha256=8650f76cd4009c3b54955eb5d7e3a075c60a57276766ebf36f9085e8c9f23192
   refract (1.1.0) sha256=ee3b9627e39f7692831101e2fedd73e0d09a592ff5d5c05f171d14211fc7a9c7
   reline (0.6.3) sha256=1198b04973565b36ec0f11542ab3f5cfeeec34823f4e54cebde90968092b1835
@@ -217,16 +206,7 @@ CHECKSUMS
   sequel (5.102.0) sha256=c25bb85a44ae59b3ed41ca7c32c33316cf81a6fcaeabedb4036ba141dde70919
   sourced (0.0.1)
   sourced-ui (0.1.0)
-  sqlite3 (2.9.2-aarch64-linux-gnu) sha256=eeb86db55645b85327ba75129e3614658d974bf4da8fdc87018a0d42c59f6e42
-  sqlite3 (2.9.2-aarch64-linux-musl) sha256=4feff91fb8c2b13688da34b5627c9d1ed9cedb3ee87a7114ec82209147f07a6d
-  sqlite3 (2.9.2-arm-linux-gnu) sha256=1ee2eb06b5301aaf5ce343a6e88d99ac932d95202d7b350f0e7b6d8d588580d7
-  sqlite3 (2.9.2-arm-linux-musl) sha256=8ca0de6aceede968de0394e22e95d549834c4d8e318f69a92a52f049878a0057
   sqlite3 (2.9.2-arm64-darwin) sha256=d15bd9609a05f9d54930babe039585efc8cadd57517c15b64ec7dfa75158a5e9
-  sqlite3 (2.9.2-x86-linux-gnu) sha256=066bc904522f8a7072236a81237c03a4a1dfe070a25107e392de03d1e4ad0e6d
-  sqlite3 (2.9.2-x86-linux-musl) sha256=6503c76278f5e8629b12b6518ff43a9a4f6d9381de73f0b086c9fa1226db5ede
-  sqlite3 (2.9.2-x86_64-darwin) sha256=ed691b5021674d72582d03c5a38e89634b961902735fb6225273892805421d13
-  sqlite3 (2.9.2-x86_64-linux-gnu) sha256=dce83ffcb7e72f9f7aeb6e5404f15d277a45332fe18ccce8a8b3ed51e8d23aee
-  sqlite3 (2.9.2-x86_64-linux-musl) sha256=e8dd906a613f13b60f6d47ae9dda376384d9de1ab3f7e3f2fdf2fd18a871a2d7
   string-format (0.2.0) sha256=bc981c14116b061f12134549f32fa2d61a17b5a35dd6fd36596c21722a789af6
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
   traces (0.18.2) sha256=80f1649cb4daace1d7174b81f3b3b7427af0b93047759ba349960cb8f315e214

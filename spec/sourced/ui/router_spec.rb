@@ -49,6 +49,29 @@ class TestRouter < Sourced::UI::Router
   get '/callable/:id', callable_handler
 end
 
+class SessionRouter < Sourced::UI::Router
+  session secret: 'a' * 64
+
+  post '/login' do
+    session[:user_id] = request.params['user_id']
+    [200, { 'Content-Type' => 'text/plain' }, ['logged in']]
+  end
+
+  get '/profile' do
+    user_id = session[:user_id]
+    if user_id
+      [200, { 'Content-Type' => 'text/plain' }, ["user:#{user_id}"]]
+    else
+      [401, { 'Content-Type' => 'text/plain' }, ['unauthorized']]
+    end
+  end
+
+  post '/logout' do
+    session.clear
+    [200, { 'Content-Type' => 'text/plain' }, ['logged out']]
+  end
+end
+
 RSpec.describe Sourced::UI::Router do
   include Rack::Test::Methods
 
@@ -167,6 +190,55 @@ RSpec.describe Sourced::UI::Router do
       get '/callable/99'
       expect(last_response.status).to eq(200)
       expect(last_response.body).to eq('callable:99:GET')
+    end
+  end
+
+  describe 'sessions', app: :session do
+    def app
+      SessionRouter
+    end
+
+    it 'returns 401 when not logged in' do
+      get '/profile'
+      expect(last_response.status).to eq(401)
+    end
+
+    it 'persists session data across requests' do
+      post '/login', user_id: '42'
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to eq('logged in')
+
+      get '/profile'
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to eq('user:42')
+    end
+
+    it 'clears session on logout' do
+      post '/login', user_id: '42'
+      get '/profile'
+      expect(last_response.body).to eq('user:42')
+
+      post '/logout'
+      expect(last_response.body).to eq('logged out')
+
+      get '/profile'
+      expect(last_response.status).to eq(401)
+    end
+
+    it 'sets a signed cookie' do
+      post '/login', user_id: '1'
+      cookie = last_response.headers['set-cookie']
+      expect(cookie).to include('rack.session')
+    end
+  end
+
+  describe '#session without configuration' do
+    it 'raises when sessions are not enabled' do
+      # TestRouter has no session configured
+      env = Rack::MockRequest.env_for('/')
+      req = Rack::Request.new(env)
+      router = TestRouter.new(req)
+      expect { router.session }.to raise_error(RuntimeError, /Sessions not configured/)
     end
   end
 end

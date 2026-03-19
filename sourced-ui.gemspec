@@ -35,6 +35,7 @@ Gem::Specification.new do |spec|
 
   # Uncomment to register a new dependency of your gem
   spec.add_dependency 'rack'
+  spec.add_dependency 'rack-session'
   spec.add_dependency 'sourced'
   spec.add_dependency 'phlex'
   spec.add_dependency 'datastar', '1.0.2'

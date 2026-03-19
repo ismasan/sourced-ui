@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rack'
+require 'rack/session/cookie'
 
 module Sourced
   module UI
@@ -62,13 +63,13 @@ module Sourced
     #     run MyApp
     #   end
     class Router
-      class << self
-        GET = 'GET'
-        POST = 'POST'
-        DELETE = 'DELETE'
-        PATCH = 'PATCH'
-        PUT = 'PUT'
+      GET = 'GET'
+      POST = 'POST'
+      DELETE = 'DELETE'
+      PATCH = 'PATCH'
+      PUT = 'PUT'
 
+      class << self
         # Returns the registered routes, keyed by HTTP method.
         #
         # Each entry is an array of +[pattern, path, handler]+ tuples where
@@ -167,7 +168,49 @@ module Sourced
           end
         end
 
-        # Register a route
+        # Configure signed cookie sessions for this router.
+        #
+        # Wraps the router in +Rack::Session::Cookie+ middleware with HMAC signing.
+        # Once enabled, route handlers can access the session via {#session}.
+        #
+        # @param secret [String] HMAC signing secret (required, must be >= 64 bytes
+        #   for security; +Rack::Session::Cookie+ enforces a 16-byte minimum)
+        # @param opts [Hash] additional options forwarded to +Rack::Session::Cookie+
+        # @option opts [String] :key cookie name (default: +"rack.session"+)
+        # @option opts [String] :path cookie path (default: +"/"+)
+        # @option opts [Boolean] :httponly (default: +true+)
+        # @option opts [Symbol] :same_site +:lax+, +:strict+, or +:none+ (default: +:lax+)
+        # @option opts [Integer] :expire_after seconds until cookie expires
+        # @return [void]
+        #
+        # @example
+        #   class MyApp < Sourced::UI::Router
+        #     session secret: ENV.fetch('SESSION_SECRET')
+        #
+        #     get '/login' do
+        #       session[:user_id] = 42
+        #       [200, {}, ['logged in']]
+        #     end
+        #
+        #     get '/profile' do
+        #       [200, {}, ["user: #{session[:user_id]}"]]
+        #     end
+        #   end
+        def session(secret:, **opts)
+          session_options = { secret: }.merge(opts)
+          self.app = Rack::Session::Cookie.new(app, **session_options)
+          self
+        end
+
+        def app=(a)
+          @app = a
+        end
+
+        def app
+          @app ||= method(:route)
+        end
+
+        # Register a route.
         #
         # @param verb [String] HTTP method ('POST', 'GET', etc)
         # @param path [String] URL pattern
@@ -183,15 +226,22 @@ module Sourced
 
         # Rack-compatible call interface.
         #
-        # Wraps the Rack env in a +Rack::Request+, instantiates the router,
-        # and dispatches to the matched handler.
+        # When sessions are enabled via {.session}, wraps the router in
+        # +Rack::Session::Cookie+ middleware. The middleware is built once
+        # and cached for subsequent requests.
         #
         # @param env [Hash] Rack environment
         # @return [Array(Integer, Hash, Array)] Rack response triplet
         def call(env)
+          app.call(env)
+        end
+
+        def route(env)
           req = Rack::Request.new(env)
           new(req).call
         end
+
+        private
 
         # Compile a path pattern into a Regexp.
         #
@@ -215,6 +265,27 @@ module Sourced
         @request = request
       end
 
+      # Returns the session hash for the current request.
+      #
+      # Only available when sessions are enabled via {.session} on the
+      # router subclass. Raises if sessions are not configured.
+      #
+      # @return [Rack::Session::Abstract::SessionHash] session data
+      # @raise [RuntimeError] if sessions are not enabled
+      #
+      # @example Reading and writing session data
+      #   post '/login' do
+      #     session[:user_id] = request.params['user_id']
+      #     [200, {}, ['ok']]
+      #   end
+      #
+      #   get '/whoami' do
+      #     [200, {}, ["user: #{session[:user_id]}"]]
+      #   end
+      def session
+        request.env['rack.session'] || raise('Sessions not configured. Use `session secret: "..."` in your Router subclass.')
+      end
+
       # Dispatch the request to a matching route handler.
       #
       # Returns +404+ if no route matches. For redirects, returns +301+ with a
@@ -231,11 +302,7 @@ module Sourced
         handler, params = match(request.request_method, request.path_info)
 
         if handler.nil?
-          return [404, {'Content-Type' => 'text/html'}, ['Resource not found']]
-        end
-
-        if handler.is_a?(Array) && handler[0] == :redirect
-          return [301, {'Location' => handler[1]}, []]
+          return not_found
         end
 
         request.env['router.params'] = params
@@ -245,6 +312,10 @@ module Sourced
         else
           handler.call(request, params)
         end
+      end
+
+      private def not_found
+        [404, {'Content-Type' => 'text/html'}, ['Resource not found']]
       end
 
       # Find the first route matching the given HTTP method and path.
