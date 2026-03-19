@@ -151,6 +151,12 @@ RSpec.describe Sourced::UI::Router do
       expect(last_response.status).to eq(200)
       expect(last_response.body).to eq('item:42:comment:7')
     end
+
+    it 'matches root route with empty path_info (mounted sub-app)' do
+      get ''
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to eq('root')
+    end
   end
 
   describe 'redirects' do

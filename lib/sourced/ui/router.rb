@@ -246,13 +246,16 @@ module Sourced
         # Compile a path pattern into a Regexp.
         #
         # Named segments like +:id+ become named capture groups.
-        # An optional trailing slash is appended so both +/items+ and
-        # +/items/+ match the same route.
+        # A trailing slash in the pattern is stripped and re-added as optional,
+        # so both +/items+ and +/items/+ match the same route. For the root
+        # path (+/+), this also matches an empty +path_info+ (which Rack
+        # produces when a sub-app is mounted without a trailing slash).
         #
         # @param path [String] route pattern (e.g. +/items/:id+)
         # @return [Regexp] compiled pattern
         private def compile(path)
           pattern = path.gsub(/:([a-z_]+)/, '(?<\1>[^/]+)')
+          pattern = pattern.chomp('/')
           Regexp.new("\\A#{pattern}/?\\z")
         end
       end
