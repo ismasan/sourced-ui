@@ -377,8 +377,11 @@ module Sourced
 
       # Dispatch the request to a matching route handler.
       #
-      # Returns +404+ if no route matches. For redirects, returns +301+ with a
-      # +Location+ header. Matched path parameters are stored in
+      # Walks the trie for the request's HTTP method, matching each path
+      # segment by exact hash lookup (static) or {Node#param_child}
+      # fallback (dynamic). Returns +404+ if no route matches.
+      #
+      # Matched path parameters are stored in
       # +request.env['router.params']+ as a symbol-keyed hash.
       #
       # When the handler is a block, it is evaluated via +instance_exec+
@@ -388,12 +391,28 @@ module Sourced
       #
       # @return [Array(Integer, Hash, Array)] Rack response triplet
       def call
-        handler, params = match(request.request_method, request.path_info)
+        node = self.class.routes[request.request_method]
+        return NOT_FOUND unless node
 
-        if handler.nil?
-          return not_found
+        segments = self.class.split_path(request.path_info)
+        params = nil
+
+        segments.each do |segment|
+          child = node[segment]
+          unless child
+            return NOT_FOUND unless node.param_child
+
+            child = node.param_child
+            (params ||= {})[node.param_name] = segment
+          end
+          node = child
+          return NOT_FOUND unless node.is_a?(Node)
         end
 
+        handler = node['']
+        return NOT_FOUND unless handler
+
+        params ||= EMPTY_PARAMS
         request.env['router.params'] = params
 
         if handler.is_a?(Proc) && !handler.lambda?
@@ -403,47 +422,10 @@ module Sourced
         end
       end
 
-      private def not_found
-        [404, {'Content-Type' => 'text/html'}, ['Resource not found']]
-      end
+      NOT_FOUND = [404, {'Content-Type' => 'text/html'}.freeze, ['Resource not found'].freeze].freeze
+      EMPTY_PARAMS = {}.freeze
 
-      # Walk the trie to find a handler matching the given HTTP method and path.
-      #
-      # For each path segment the lookup tries an exact string match first
-      # (O(1) hash lookup). If that fails, it checks {Node#param_child}
-      # directly (also O(1)) and captures the segment value. This gives
-      # O(path segments) dispatch regardless of the total number of
-      # registered routes.
-      #
-      # @param method [String] HTTP method (e.g. +"GET"+)
-      # @param path [String] request path
-      # @return [Array(handler, Hash{Symbol => String}), nil] the handler and
-      #   extracted params, or +nil+ if no route matches
-      private def match(method, path)
-        node = self.class.routes[method]
-        return nil unless node
-
-        segments = self.class.split_path(path)
-        params = {}
-
-        segments.each do |segment|
-          # Try exact static match first (O(1) hash lookup)
-          child = node[segment]
-          unless child
-            # Fall back to dynamic param (O(1) direct access)
-            return nil unless node.param_child
-
-            child = node.param_child
-            params[node.param_name] = segment
-          end
-          node = child
-          return nil unless node.is_a?(Node)
-        end
-
-        # The empty-string leaf holds the handler
-        handler = node['']
-        handler ? [handler, params] : nil
-      end
+      private_constant :NOT_FOUND, :EMPTY_PARAMS
     end
   end
 end
