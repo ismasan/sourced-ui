@@ -77,13 +77,21 @@ module Sourced
       PATCH = 'PATCH'
       PUT = 'PUT'
 
-      # @api private
-      # Strips leading or trailing slashes from a path string.
-      NOSLASH = /\A\/|\/\z/
+      # Split a path into segments, stripping leading/trailing slashes.
+      #
+      # @param path [String] URL path (e.g. +"/items/42/"+)
+      # @return [Array<String>] path segments (e.g. +["items", "42"]+)
+      def self.split_path(path)
+        path.delete_prefix('/').delete_suffix('/').split('/')
+      end
 
       # @api private
       # Matches a colon-prefixed segment and captures the name.
       PARAM_EXP = /\A:(.+)/
+
+      # A dynamic path segment descriptor produced by {.compile}.
+      # Holds the parameter name as a Symbol (e.g. +Param[:id]+).
+      Param = Data.define(:name)
 
       # A node in the route trie.
       #
@@ -300,36 +308,35 @@ module Sourced
         # Compile a path pattern into an array of segment descriptors.
         #
         # Strips leading/trailing slashes and splits on +/+. Each segment
-        # is either a plain String (static) or a +[:param, name]+ pair
-        # (dynamic). An empty string is appended as the leaf sentinel.
+        # is either a plain String (static) or a {Param} (dynamic).
+        # An empty string is appended as the leaf sentinel.
         #
         # @param path [String] route pattern (e.g. +/items/:id+)
-        # @return [Array] segment descriptors ending with +""+
+        # @return [Array<String, Param>] segment descriptors ending with +""+
         private def compile(path)
-          path.gsub(NOSLASH, '').split('/').map do |segment|
+          split_path(path).map do |segment|
             m = PARAM_EXP.match(segment)
-            m ? [:param, m[1].to_sym] : segment
+            m ? Param.new(m[1].to_sym) : segment
           end << ''
         end
 
         # Insert a route into the trie.
         #
         # Static segments become hash keys on {Node} for O(1) lookup.
-        # Dynamic segments are stored via {Node#param_name} and
+        # Dynamic segments ({Param}) are stored via {Node#param_name} and
         # {Node#param_child} for direct access. The empty-string leaf
-        # key holds the handler.
+        # sentinel (+""+ ) stores the handler.
         #
         # @example Resulting trie for +get '/items/:id'+
         #   Node{ "items" => Node{ param_name: :id, param_child: Node{ "" => handler } } }
         private def merge_route!(node, segments, handler)
-          segments.each_with_index do |seg, i|
-            if seg.is_a?(Array) && seg[0] == :param
-              name = seg[1]
-              node.param_name = name
+          segments.each do |seg|
+            case seg
+            when Param
+              node.param_name = seg.name
               node.param_child ||= Node.new
               node = node.param_child
-            elsif i == segments.size - 1
-              # Leaf sentinel — store the handler
+            when ''
               node[seg] = handler
             else
               node[seg] ||= Node.new
@@ -416,7 +423,7 @@ module Sourced
         node = self.class.routes[method]
         return nil unless node
 
-        segments = path.gsub(NOSLASH, '').split('/')
+        segments = self.class.split_path(path)
         params = {}
 
         segments.each do |segment|
