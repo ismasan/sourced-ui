@@ -81,34 +81,42 @@ module Sourced
       # Strips leading or trailing slashes from a path string.
       NOSLASH = /\A\/|\/\z/
 
-      # A dynamic path segment key in the route trie.
-      # Holds the parameter name as a Symbol (e.g. +Param[:id]+).
-      Param = Data.define(:name)
-
       # @api private
       # Matches a colon-prefixed segment and captures the name.
       PARAM_EXP = /\A:(.+)/
 
-      # @api private
-      # Sentinel appended to compiled segments — the empty-string leaf
-      # key that stores the handler in the trie.
-      LAST = [''].freeze
+      # A node in the route trie.
+      #
+      # Static segments are stored as hash keys for O(1) lookup.
+      # A single optional dynamic segment (+:param+) is stored in
+      # {#param_name} / {#param_child} for direct access without
+      # scanning keys.
+      #
+      # The empty-string key (+""+ ) at a leaf holds the handler.
+      class Node < Hash
+        # @return [Symbol, nil] the parameter name, if this node has a dynamic child
+        attr_accessor :param_name
+
+        # @return [Node, nil] the child node for the dynamic segment
+        attr_accessor :param_child
+      end
 
       class << self
         # Returns the route tries, keyed by HTTP method.
         #
-        # Each value is a nested Hash (trie) where string keys are static
-        # path segments, {Param} keys are dynamic segments, and the empty
-        # string key (+""+ ) at a leaf holds the handler.
+        # Each value is a {Node} (trie root) where string keys are static
+        # path segments, dynamic segments are stored via {Node#param_name}
+        # / {Node#param_child}, and the empty-string key (+""+ ) at a
+        # leaf holds the handler.
         #
-        # @return [Hash{String => Hash}]
+        # @return [Hash{String => Node}]
         def routes
           @routes ||= {
-            GET => {},
-            POST => {},
-            DELETE => {},
-            PATCH => {},
-            PUT => {}
+            GET => Node.new,
+            POST => Node.new,
+            DELETE => Node.new,
+            PATCH => Node.new,
+            PUT => Node.new
           }
         end
 
@@ -289,35 +297,45 @@ module Sourced
 
         private
 
-        # Compile a path pattern into an array of trie keys.
+        # Compile a path pattern into an array of segment descriptors.
         #
-        # Strips leading/trailing slashes, splits on +/+, and converts
-        # +:param+ segments into {Param} instances. An empty-string
-        # sentinel ({LAST}) is appended as the leaf key.
+        # Strips leading/trailing slashes and splits on +/+. Each segment
+        # is either a plain String (static) or a +[:param, name]+ pair
+        # (dynamic). An empty string is appended as the leaf sentinel.
         #
         # @param path [String] route pattern (e.g. +/items/:id+)
-        # @return [Array<String, Param>] segment keys ending with +""+
+        # @return [Array] segment descriptors ending with +""+
         private def compile(path)
           path.gsub(NOSLASH, '').split('/').map do |segment|
             m = PARAM_EXP.match(segment)
-            m ? Param.new(m[1].to_sym) : segment
-          end + LAST
+            m ? [:param, m[1].to_sym] : segment
+          end << ''
         end
 
         # Insert a route into the trie.
         #
-        # Each segment becomes a key in a nested hash. Static segments
-        # are plain strings; dynamic segments are {Param} instances.
-        # The leaf key is always +""+  (from {LAST}) and its value is
-        # the handler.
+        # Static segments become hash keys on {Node} for O(1) lookup.
+        # Dynamic segments are stored via {Node#param_name} and
+        # {Node#param_child} for direct access. The empty-string leaf
+        # key holds the handler.
         #
         # @example Resulting trie for +get '/items/:id'+
-        #   { "items" => { Param(:id) => { "" => handler } } }
-        private def merge_route!(hash, list, handler)
-          *keys, leaf_key = list
-          target = keys.reduce(hash) { |h, k| h[k] ||= {} }
-          target[leaf_key] = handler
-          hash
+        #   Node{ "items" => Node{ param_name: :id, param_child: Node{ "" => handler } } }
+        private def merge_route!(node, segments, handler)
+          segments.each_with_index do |seg, i|
+            if seg.is_a?(Array) && seg[0] == :param
+              name = seg[1]
+              node.param_name = name
+              node.param_child ||= Node.new
+              node = node.param_child
+            elsif i == segments.size - 1
+              # Leaf sentinel — store the handler
+              node[seg] = handler
+            else
+              node[seg] ||= Node.new
+              node = node[seg]
+            end
+          end
         end
       end
 
@@ -385,9 +403,10 @@ module Sourced
       # Walk the trie to find a handler matching the given HTTP method and path.
       #
       # For each path segment the lookup tries an exact string match first
-      # (O(1) hash lookup). If that fails, it checks for a {Param} wildcard
-      # key and captures the segment value. This gives O(segments) dispatch
-      # regardless of the total number of registered routes.
+      # (O(1) hash lookup). If that fails, it checks {Node#param_child}
+      # directly (also O(1)) and captures the segment value. This gives
+      # O(path segments) dispatch regardless of the total number of
+      # registered routes.
       #
       # @param method [String] HTTP method (e.g. +"GET"+)
       # @param path [String] request path
@@ -401,21 +420,20 @@ module Sourced
         params = {}
 
         segments.each do |segment|
-          # Try exact match first
+          # Try exact static match first (O(1) hash lookup)
           child = node[segment]
           unless child
-            # Fall back to a dynamic param key
-            param_key = node.each_key.find { |k| k.is_a?(Param) }
-            return nil unless param_key
+            # Fall back to dynamic param (O(1) direct access)
+            return nil unless node.param_child
 
-            child = node[param_key]
-            params[param_key.name] = segment
+            child = node.param_child
+            params[node.param_name] = segment
           end
           node = child
-          return nil unless node.is_a?(Hash)
+          return nil unless node.is_a?(Node)
         end
 
-        # The empty-string leaf (from LAST) holds the handler
+        # The empty-string leaf holds the handler
         handler = node['']
         handler ? [handler, params] : nil
       end
