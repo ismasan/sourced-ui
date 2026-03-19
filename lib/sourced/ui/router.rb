@@ -5,7 +5,14 @@ require 'rack/session/cookie'
 
 module Sourced
   module UI
-    # A minimal Rack-compatible router with a Sinatra-style DSL.
+    # A minimal Rack-compatible router with a Sinatra-style DSL and
+    # trie-based dispatch.
+    #
+    # Routes are stored in a trie (prefix tree) keyed by path segment,
+    # giving O(path segments) lookup regardless of the total number of
+    # registered routes. Static segments are matched by exact hash lookup;
+    # dynamic segments (+:param+) act as wildcard keys that capture the
+    # corresponding path value.
     #
     # Subclass and define routes with {.get}, {.post}, {.put}, {.patch}, {.delete},
     # or {.redirect}. Route blocks are evaluated in the context of a router instance,
@@ -13,7 +20,8 @@ module Sourced
     #
     # Named parameters in paths (e.g. +:id+) are extracted and passed to the block
     # as keyword arguments. Trailing slashes are handled automatically — +/items+ and
-    # +/items/+ match the same route.
+    # +/items/+ match the same route. The root path (+/+) also matches an empty
+    # +path_info+ for mounted sub-apps.
     #
     # Unmatched requests return +404+.
     #
@@ -69,21 +77,38 @@ module Sourced
       PATCH = 'PATCH'
       PUT = 'PUT'
 
+      # @api private
+      # Strips leading or trailing slashes from a path string.
+      NOSLASH = /\A\/|\/\z/
+
+      # A dynamic path segment key in the route trie.
+      # Holds the parameter name as a Symbol (e.g. +Param[:id]+).
+      Param = Data.define(:name)
+
+      # @api private
+      # Matches a colon-prefixed segment and captures the name.
+      PARAM_EXP = /\A:(.+)/
+
+      # @api private
+      # Sentinel appended to compiled segments — the empty-string leaf
+      # key that stores the handler in the trie.
+      LAST = [''].freeze
+
       class << self
-        # Returns the registered routes, keyed by HTTP method.
+        # Returns the route tries, keyed by HTTP method.
         #
-        # Each entry is an array of +[pattern, path, handler]+ tuples where
-        # +pattern+ is a compiled Regexp, +path+ is the original string,
-        # and +handler+ is a Proc or +[:redirect, target]+.
+        # Each value is a nested Hash (trie) where string keys are static
+        # path segments, {Param} keys are dynamic segments, and the empty
+        # string key (+""+ ) at a leaf holds the handler.
         #
-        # @return [Hash{String => Array}]
+        # @return [Hash{String => Hash}]
         def routes
           @routes ||= {
-            GET => [],
-            POST => [],
-            DELETE => [],
-            PATCH => [],
-            PUT => []
+            GET => {},
+            POST => {},
+            DELETE => {},
+            PATCH => {},
+            PUT => {}
           }
         end
 
@@ -202,10 +227,23 @@ module Sourced
           self
         end
 
+        # Set the Rack app used by {.call}.
+        #
+        # Typically set by {.session} to wrap the router in middleware.
+        #
+        # @param a [#call] a Rack-compatible app
+        # @api private
         def app=(a)
           @app = a
         end
 
+        # The Rack app dispatched by {.call}.
+        #
+        # Defaults to {.route}. When middleware (e.g. sessions) is added,
+        # the middleware wraps this and becomes the new +app+.
+        #
+        # @return [#call]
+        # @api private
         def app
           @app ||= method(:route)
         end
@@ -220,15 +258,15 @@ module Sourced
         # @return [self]
         def add(verb, path, handler = nil, &h)
           handler ||= h
-          routes[verb] << [compile(path), path, handler]
+          segments = compile(path)
+          merge_route!(routes[verb], segments, handler)
           self
         end
 
         # Rack-compatible call interface.
         #
-        # When sessions are enabled via {.session}, wraps the router in
-        # +Rack::Session::Cookie+ middleware. The middleware is built once
-        # and cached for subsequent requests.
+        # Delegates to {.app}, which is either {.route} directly or
+        # a middleware chain (e.g. +Rack::Session::Cookie+) wrapping it.
         #
         # @param env [Hash] Rack environment
         # @return [Array(Integer, Hash, Array)] Rack response triplet
@@ -236,6 +274,14 @@ module Sourced
           app.call(env)
         end
 
+        # Inner Rack endpoint that performs route matching.
+        #
+        # Wraps the env in a +Rack::Request+ and delegates to {#call}.
+        # This is the default {.app} and the target that middleware wraps.
+        #
+        # @param env [Hash] Rack environment
+        # @return [Array(Integer, Hash, Array)] Rack response triplet
+        # @api private
         def route(env)
           req = Rack::Request.new(env)
           new(req).call
@@ -243,20 +289,35 @@ module Sourced
 
         private
 
-        # Compile a path pattern into a Regexp.
+        # Compile a path pattern into an array of trie keys.
         #
-        # Named segments like +:id+ become named capture groups.
-        # A trailing slash in the pattern is stripped and re-added as optional,
-        # so both +/items+ and +/items/+ match the same route. For the root
-        # path (+/+), this also matches an empty +path_info+ (which Rack
-        # produces when a sub-app is mounted without a trailing slash).
+        # Strips leading/trailing slashes, splits on +/+, and converts
+        # +:param+ segments into {Param} instances. An empty-string
+        # sentinel ({LAST}) is appended as the leaf key.
         #
         # @param path [String] route pattern (e.g. +/items/:id+)
-        # @return [Regexp] compiled pattern
+        # @return [Array<String, Param>] segment keys ending with +""+
         private def compile(path)
-          pattern = path.gsub(/:([a-z_]+)/, '(?<\1>[^/]+)')
-          pattern = pattern.chomp('/')
-          Regexp.new("\\A#{pattern}/?\\z")
+          path.gsub(NOSLASH, '').split('/').map do |segment|
+            m = PARAM_EXP.match(segment)
+            m ? Param.new(m[1].to_sym) : segment
+          end + LAST
+        end
+
+        # Insert a route into the trie.
+        #
+        # Each segment becomes a key in a nested hash. Static segments
+        # are plain strings; dynamic segments are {Param} instances.
+        # The leaf key is always +""+  (from {LAST}) and its value is
+        # the handler.
+        #
+        # @example Resulting trie for +get '/items/:id'+
+        #   { "items" => { Param(:id) => { "" => handler } } }
+        private def merge_route!(hash, list, handler)
+          *keys, leaf_key = list
+          target = keys.reduce(hash) { |h, k| h[k] ||= {} }
+          target[leaf_key] = handler
+          hash
         end
       end
 
@@ -321,19 +382,42 @@ module Sourced
         [404, {'Content-Type' => 'text/html'}, ['Resource not found']]
       end
 
-      # Find the first route matching the given HTTP method and path.
+      # Walk the trie to find a handler matching the given HTTP method and path.
+      #
+      # For each path segment the lookup tries an exact string match first
+      # (O(1) hash lookup). If that fails, it checks for a {Param} wildcard
+      # key and captures the segment value. This gives O(segments) dispatch
+      # regardless of the total number of registered routes.
       #
       # @param method [String] HTTP method (e.g. +"GET"+)
       # @param path [String] request path
       # @return [Array(handler, Hash{Symbol => String}), nil] the handler and
-      #   extracted named captures, or +nil+ if no route matches
+      #   extracted params, or +nil+ if no route matches
       private def match(method, path)
-        self.class.routes[method]&.each do |pattern, _, handler|
-          if (m = pattern.match(path))
-            return [handler, m.named_captures.transform_keys(&:to_sym)]
+        node = self.class.routes[method]
+        return nil unless node
+
+        segments = path.gsub(NOSLASH, '').split('/')
+        params = {}
+
+        segments.each do |segment|
+          # Try exact match first
+          child = node[segment]
+          unless child
+            # Fall back to a dynamic param key
+            param_key = node.each_key.find { |k| k.is_a?(Param) }
+            return nil unless param_key
+
+            child = node[param_key]
+            params[param_key.name] = segment
           end
+          node = child
+          return nil unless node.is_a?(Hash)
         end
-        nil
+
+        # The empty-string leaf (from LAST) holds the handler
+        handler = node['']
+        handler ? [handler, params] : nil
       end
     end
   end
