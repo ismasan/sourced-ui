@@ -14,4 +14,7 @@ gem 'sourced', path: '/Users/ismasan/code/personal/gems/sourced'
 group :test do
   gem 'debug'
   gem 'nokogiri'
+  gem 'rack-test'
+  gem 'sequel'
+  gem 'sqlite3'
 end
