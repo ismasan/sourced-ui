@@ -392,7 +392,7 @@ module Sourced
       # @return [Array(Integer, Hash, Array)] Rack response triplet
       def call
         node = self.class.routes[request.request_method]
-        return NOT_FOUND unless node
+        return not_found unless node
 
         segments = self.class.split_path(request.path_info)
         params = nil
@@ -400,17 +400,17 @@ module Sourced
         segments.each do |segment|
           child = node[segment]
           unless child
-            return NOT_FOUND unless node.param_child
+            return not_found unless node.param_child
 
             child = node.param_child
             (params ||= {})[node.param_name] = segment
           end
           node = child
-          return NOT_FOUND unless node.is_a?(Node)
+          return not_found unless node.is_a?(Node)
         end
 
         handler = node['']
-        return NOT_FOUND unless handler
+        return not_found unless handler
 
         params ||= EMPTY_PARAMS
         request.env['router.params'] = params
@@ -426,6 +426,10 @@ module Sourced
       EMPTY_PARAMS = {}.freeze
 
       private_constant :NOT_FOUND, :EMPTY_PARAMS
+
+      private def not_found
+        NOT_FOUND
+      end
     end
   end
 end
