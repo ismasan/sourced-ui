@@ -49,7 +49,7 @@ module Sourced
           end
 
           private def is_command?(message)
-            message.is_a?(Sourced::CCC::Message::Command)
+            message.is_a?(Sourced::Message::Command)
           end
         end
       end

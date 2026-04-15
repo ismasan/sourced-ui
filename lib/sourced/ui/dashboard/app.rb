@@ -3,7 +3,7 @@
 require 'rack'
 require 'logger'
 require 'rack/static'
-require 'sourced/ccc'
+
 require 'datastar'
 require 'sourced/ui/router'
 require 'sourced/ui/dashboard/components'
@@ -57,21 +57,21 @@ module Sourced
 
         post '/consumer-groups/resume' do
           group_id = request.params['group_id']
-          Sourced::CCC.start_consumer_group(group_id)
+          Sourced.start_consumer_group(group_id)
 
           [204, {'Content-Type' => 'text/html'}, []]
         end
 
         post '/consumer-groups/stop' do
           group_id = request.params['group_id']
-          Sourced::CCC.stop_consumer_group(group_id)
+          Sourced.stop_consumer_group(group_id)
 
           [204, {'Content-Type' => 'text/html'}, []]
         end
 
         post '/consumer-groups/reset' do
           group_id = request.params['group_id']
-          Sourced::CCC.reset_consumer_group(group_id)
+          Sourced.reset_consumer_group(group_id)
 
           [204, {'Content-Type' => 'text/html'}, []]
         end
@@ -143,7 +143,7 @@ module Sourced
         get '/events/:event_id/correlation' do |params|
           event_id = params[:event_id]
 
-          events = Sourced::CCC.store.read_correlation_batch(event_id)
+          events = Sourced.store.read_correlation_batch(event_id)
           datastar.stream do |sse|
             sse.patch_elements Components::Modal.new(
               title: 'Message correlation',
@@ -162,13 +162,13 @@ module Sourced
         end
 
         get '/topology' do
-          phlex(Components::TopologyPage.new(topology: Sourced::CCC.topology.map(&:to_h)))
+          phlex(Components::TopologyPage.new(topology: Sourced.topology.map(&:to_h)))
         end
 
         private
 
         def store
-          Sourced::CCC.store
+          Sourced.store
         end
 
         def phlex(component, status: 200)

@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 require 'rack/test'
-require 'sourced/ccc'
+
 require 'sourced/ui/dashboard'
 
 RSpec.describe Sourced::UI::Dashboard::App do
@@ -12,9 +12,9 @@ RSpec.describe Sourced::UI::Dashboard::App do
     Sourced::UI::Dashboard::App
   end
 
-  TestEvent = Sourced::CCC::Event.define('test.event') unless defined?(TestEvent)
+  TestEvent = Sourced::Event.define('test.event') unless defined?(TestEvent)
 
-  class TestProjector < Sourced::CCC::Projector::EventSourced
+  class TestProjector < Sourced::Projector::EventSourced
     partition_by :id
 
     state do |_partition_values|
@@ -31,17 +31,17 @@ RSpec.describe Sourced::UI::Dashboard::App do
   end
 
   before(:all) do
-    Sourced::CCC.reset!
-    Sourced::CCC.configure { |_c| }
-    Sourced::CCC.register(TestProjector)
+    Sourced.reset!
+    Sourced.configure { |_c| }
+    Sourced.register(TestProjector)
 
-    store = Sourced::CCC.store
+    store = Sourced.store
     events = 3.times.map { TestEvent.new }
     store.append(events)
   end
 
   after(:all) do
-    Sourced::CCC.reset!
+    Sourced.reset!
   end
 
   describe 'GET /' do

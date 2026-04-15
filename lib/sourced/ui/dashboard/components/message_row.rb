@@ -11,7 +11,7 @@ module Sourced
           def initialize(message, href: nil, highlighted: false)
             @message = message
             @href = href
-            @is_command = message.is_a?(Sourced::CCC::Command)
+            @is_command = message.is_a?(Sourced::Command)
             @highlighted = highlighted
             @classes = [
               'event-card',

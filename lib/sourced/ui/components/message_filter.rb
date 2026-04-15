@@ -7,9 +7,9 @@ module Sourced
         include Sourced::Types
 
         MessageClass = Types::Any.check('must be a Sourced::Message class') { |v|
-          v.is_a?(Class) && v <= Sourced::CCC::Message
+          v.is_a?(Class) && v <= Sourced::Message
         }
-        MessageTypeOrClass = MessageClass | String.build(Class) { |v| Sourced::CCC::Message.registry[v]}
+        MessageTypeOrClass = MessageClass | String.build(Class) { |v| Sourced::Message.registry[v]}
         FilterEntry = Hash[type: MessageTypeOrClass, attributes: Hash[String, String]]
         Filters = Array[FilterEntry]
       end
@@ -19,7 +19,7 @@ module Sourced
         # @param available [Enumerator, Array] message classes available to add (for the dropdown)
         # @param action [String, nil] URL to POST to when "Add" is clicked (enables Datastar interaction)
         # @param submit [String, nil] form action URL for GET submit
-        def initialize(filters: [], available: Sourced::CCC::Message.registry.all, action: nil, submit: nil)
+        def initialize(filters: [], available: Sourced::Message.registry.all, action: nil, submit: nil)
           @filters = Types::Filters.parse(filters)
           @available = available.to_a
           @action = action

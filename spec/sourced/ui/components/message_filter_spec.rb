@@ -6,12 +6,12 @@ require 'nokogiri'
 require 'sourced/ui/components'
 
 RSpec.describe Sourced::UI::Components::MessageFilter do
-  FilterTestEvent = Sourced::CCC::Event.define('test.thing_created') do
+  FilterTestEvent = Sourced::Event.define('test.thing_created') do
     attribute :name, String
     attribute :amount, Integer
   end unless defined?(FilterTestEvent)
 
-  FilterTestCommand = Sourced::CCC::Command.define('test.create_thing') do
+  FilterTestCommand = Sourced::Command.define('test.create_thing') do
     attribute :title, String
   end unless defined?(FilterTestCommand)
 

@@ -6,7 +6,7 @@ require 'nokogiri'
 require 'sourced/ui/components'
 
 RSpec.describe Sourced::UI::Components::Command do
-  TestCommand = Sourced::CCC::Command.define('test.create_thing') do
+  TestCommand = Sourced::Command.define('test.create_thing') do
     attribute :name, String
   end unless defined?(TestCommand)
 

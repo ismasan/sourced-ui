@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'sourced'
-require 'sourced/ccc'
 require 'datastar'
 require_relative "ui/version"
 
@@ -15,10 +14,10 @@ module Sourced
     # which includes the expected input names and _cid value.
     # @example
     #   Sourced::UI.streaming_command_errors(cmd, datastar) do |cmd|
-    #     Sourced::CCC.handle!(MyDecider, cmd)
+    #     Sourced.handle!(MyDecider, cmd)
     #   end
     #
-    # @param cmd [Sourced::CCC::Command] the command to process
+    # @param cmd [Sourced::Command] the command to process
     # @param datastar [Datastar::Dispatcher] the datastar instance to stream errors to
     def self.streaming_command_errors(cmd, datastar, &)
       if cmd.valid? # <== schedule valid command for processing

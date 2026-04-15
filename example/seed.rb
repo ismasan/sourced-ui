@@ -3,7 +3,7 @@
 # Seed script: creates tasks and completes some of them.
 # Usage: cd example && bundle exec ruby seed.rb
 #
-# Each CCC.handle! call appends a command and its correlated events
+# Each Sourced.handle! call appends a command and its correlated events
 # so the dashboard event log shows realistic causation chains.
 
 require_relative 'domain'
@@ -32,7 +32,7 @@ task_ids = TASK_COUNT.times.map do |i|
   cmd = TaskApp::CreateTask.new(
     payload: { task_id: task_id, title: random_title(i + 1) }
   )
-  _cmd, _decider, events = CCC.handle!(TaskApp::TaskDecider, cmd)
+  _cmd, _decider, events = Sourced.handle!(TaskApp::TaskDecider, cmd)
 
   print "\r  Created #{i + 1}/#{TASK_COUNT}"
   task_id
@@ -47,7 +47,7 @@ to_complete.each_with_index do |task_id, i|
   cmd = TaskApp::CompleteTask.new(
     payload: { task_id: task_id }
   )
-  _cmd, _decider, events = CCC.handle!(TaskApp::TaskDecider, cmd)
+  _cmd, _decider, events = Sourced.handle!(TaskApp::TaskDecider, cmd)
 
   print "\r  Completed #{i + 1}/#{complete_count}"
 end

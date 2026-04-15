@@ -2,16 +2,13 @@
 
 require 'bundler/setup'
 require 'sourced'
-require 'sourced/ccc'
 require 'sequel'
-
-CCC = Sourced::CCC
 
 module TaskApp
   # --- Messages ---
 
-  class Event < CCC::Message; end
-  class Command < CCC::Message; end
+  class Event < Sourced::Message; end
+  class Command < Sourced::Message; end
 
   CreateTask    = Command.define('tasks.create')   { attribute :task_id, String; attribute :title, String }
   TaskCreated   = Event.define('tasks.created')     { attribute :task_id, String; attribute :title, String }
@@ -21,7 +18,7 @@ module TaskApp
   # --- Decider ---
 
   # Enforces task lifecycle: can't create twice, can't complete if not created.
-  class TaskDecider < CCC::Decider
+  class TaskDecider < Sourced::Decider
     partition_by :task_id
 
     state do |_partition_values|
@@ -54,7 +51,7 @@ module TaskApp
 
   # Evolves state from task events.
   # Registered as a consumer group so the dashboard has topology data.
-  class TaskLogProjector < CCC::Projector::EventSourced
+  class TaskLogProjector < Sourced::Projector::EventSourced
     partition_by :task_id
 
     state do |_partition_values|
@@ -79,10 +76,10 @@ module TaskApp
 
   DB_PATH = File.join(__dir__, 'storage', 'app.db')
 
-  CCC.configure do |c|
+  Sourced.configure do |c|
     c.store = Sequel.sqlite(DB_PATH)
   end
 
-  CCC.register(TaskDecider)
-  CCC.register(TaskLogProjector)
+  Sourced.register(TaskDecider)
+  Sourced.register(TaskLogProjector)
 end

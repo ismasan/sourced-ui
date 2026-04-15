@@ -6,7 +6,7 @@ require 'sourced/ui/dashboard'
 
 RSpec.describe Sourced::UI::Dashboard do
   # Define a test message type for specs
-  TestEvent = Sourced::CCC::Event.define('test.event') unless defined?(TestEvent)
+  TestEvent = Sourced::Event.define('test.event') unless defined?(TestEvent)
 
   describe '.build_causation_tree' do
     it 'builds tree with common root' do
