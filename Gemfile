@@ -11,8 +11,7 @@ gem "rspec", "~> 3.0"
 
 gem 'sourced', path: '/Users/ismasan/code/personal/gems/sourced'
 
-group :test, :development do
-  gem 'benchmark'
+group :test do
   gem 'debug'
   gem 'nokogiri'
   gem 'rack-test'
