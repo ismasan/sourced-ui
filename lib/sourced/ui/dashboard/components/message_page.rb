@@ -23,23 +23,29 @@ module Sourced
           private def switch_layout(**kargs, &)
             if @layout
               Layout(**kargs) do
-                div(id: 'container', &)
+                div(id: 'container', class: 'three-col', &)
               end
             else
-              div(id: 'container', &)
+              div(id: 'container', class: 'three-col', &)
             end
           end
 
           def view_template
             switch_layout(title: "log position: #{@current_message&.position}") do
-              div id: 'main', data: _d.signals(showPayloads: false).to_h do
-                h1 { 'Global Message Log' }
-
+              div(id: 'panel-left') do
                 render Sourced::UI::Components::MessageFilter.new(
                   filters: @filters,
                   action: helpers.url('/log/filters/add'),
                   submit: helpers.url('/log')
                 )
+              end
+
+              div(id: 'panel-center') do
+                MessageList(messages: @messages, position: @current_message&.position, navigation: @filters.empty?)
+              end
+
+              div(id: 'panel-right', data: _d.signals(showPayloads: false).to_h) do
+                h1 { 'Global Message Log' }
 
                 if @current_message
                   h4 { 'Current message' }
@@ -72,10 +78,6 @@ module Sourced
                     end
                   end
                 end
-              end
-
-              div id: 'sidebar' do
-                MessageList(messages: @messages, position: @current_message&.position, navigation: @filters.empty?)
               end
             end
           end

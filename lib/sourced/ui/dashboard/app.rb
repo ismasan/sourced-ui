@@ -25,6 +25,8 @@ module Sourced
       end
 
       class Service < Router
+        session secret: ENV.fetch('SOURCED_DASHBOARD_SESSION_SECRET') { 'x' * 64 }
+
         get '/' do
           messages = store.read_all(limit: per_page, order: :desc)
           phlex(Components::SystemPage.new(
