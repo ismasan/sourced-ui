@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
 require 'rack'
-require 'logger'
 require 'rack/static'
-
+require 'logger'
 require 'datastar'
-require 'sourced/ui/router'
+require 'sidereal'
 require 'sourced/ui/dashboard/components'
 require 'sourced/ui/dashboard/components/modal'
 require 'sourced/ui/dashboard/components/system_page'
@@ -24,20 +23,51 @@ module Sourced
         [[:all, {"cache-control" => "private, max-age=86400"}]].freeze
       end
 
-      class Service < Router
+      # Consumer-group operations are exposed to the browser as typed
+      # Sidereal messages, dispatched via `POST /commands`.
+      ResumeConsumerGroup = Sidereal::Message.define('sourced.ui.resume_consumer_group') do
+        attribute :group_id, Sidereal::Types::String.present
+      end
+
+      StopConsumerGroup = Sidereal::Message.define('sourced.ui.stop_consumer_group') do
+        attribute :group_id, Sidereal::Types::String.present
+      end
+
+      ResetConsumerGroup = Sidereal::Message.define('sourced.ui.reset_consumer_group') do
+        attribute :group_id, Sidereal::Types::String.present
+      end
+
+      class Service < Sidereal::App
         session secret: ENV.fetch('SOURCED_DASHBOARD_SESSION_SECRET') { 'x' * 64 }
+
+        handle ResumeConsumerGroup do |cmd|
+          Sourced.start_consumer_group(cmd.payload.group_id)
+          status 204
+        end
+
+        handle StopConsumerGroup do |cmd|
+          Sourced.stop_consumer_group(cmd.payload.group_id)
+          status 204
+        end
+
+        handle ResetConsumerGroup do |cmd|
+          Sourced.reset_consumer_group(cmd.payload.group_id)
+          status 204
+        end
 
         get '/' do
           messages = store.read_all(limit: per_page, order: :desc)
-          phlex(Components::SystemPage.new(
+          component(Components::SystemPage.new(
             stats: store.stats,
             messages:
           ))
         end
 
         get '/updates' do
+          Console.warn "EEEEAAA #{url('/uno')} #{request.script_name}"
           stats = store.stats
           datastar.stream do |sse|
+            Console.warn "EEEEAAA #{url('/dos')} #{request.script_name}"
             while true
               sleep 1
               messages = store.read_all(limit: per_page, order: :desc)
@@ -51,31 +81,11 @@ module Sourced
               new_stats = store.stats
               next unless stats != new_stats
 
+              Console.warn "EEEEAAA #{url('/dos')}"
               stats = new_stats
               sse.patch_elements Components::SystemPage::Consumers.new(stats:)
             end
           end
-        end
-
-        post '/consumer-groups/resume' do
-          group_id = request.params['group_id']
-          Sourced.start_consumer_group(group_id)
-
-          [204, {'Content-Type' => 'text/html'}, []]
-        end
-
-        post '/consumer-groups/stop' do
-          group_id = request.params['group_id']
-          Sourced.stop_consumer_group(group_id)
-
-          [204, {'Content-Type' => 'text/html'}, []]
-        end
-
-        post '/consumer-groups/reset' do
-          group_id = request.params['group_id']
-          Sourced.reset_consumer_group(group_id)
-
-          [204, {'Content-Type' => 'text/html'}, []]
         end
 
         post '/log/filters/add' do
@@ -87,15 +97,14 @@ module Sourced
           datastar.stream do |sse|
             sse.patch_elements Sourced::UI::Components::MessageFilter.new(
               filters: filters,
-              action: view_context.url('/log/filters/add'),
-              submit: view_context.url('/log')
+              action: url('/log/filters/add'),
+              submit: url('/log')
             )
           end
         end
 
         get '/log/:position' do |position:|
           position = position.to_i
-          # Fetch the 50-item page that contains the requested position
           page_start = ((position - 1) / per_page) * per_page + 1
           messages = store.read_all(from_position: page_start, limit: per_page)
 
@@ -111,7 +120,7 @@ module Sourced
               )
             end
           else
-            phlex Components::MessagePage.new(position:, messages:)
+            component Components::MessagePage.new(position:, messages:)
           end
         end
 
@@ -120,7 +129,7 @@ module Sourced
           filters = parse_filter_params(request.params)
           conditions = filters_to_conditions(filters)
           messages = store.read_all(from_position: from, conditions: conditions, limit: per_page)
-          phlex Components::MessagePage.new(position: from, messages:, filters: filters)
+          component Components::MessagePage.new(position: from, messages:, filters: filters)
         end
 
         get '/log/more' do
@@ -138,13 +147,11 @@ module Sourced
               end
             end
           else
-            [204, {}, []]
+            status 204
           end
         end
 
-        get '/events/:event_id/correlation' do |params|
-          event_id = params[:event_id]
-
+        get '/events/:event_id/correlation' do |event_id:|
           events = Sourced.store.read_correlation_batch(event_id)
           datastar.stream do |sse|
             sse.patch_elements Components::Modal.new(
@@ -160,31 +167,17 @@ module Sourced
           group_id = request.params['group_id']&.then { |v| v.empty? ? nil : v }
           groups = store.stats.groups
           result = store.read_offsets(limit: per_page, from_id: from_id, group_id: group_id)
-          phlex(Components::OffsetsPage.new(result:, groups:, selected_group: group_id))
+          component(Components::OffsetsPage.new(result:, groups:, selected_group: group_id))
         end
 
         get '/topology' do
-          phlex(Components::TopologyPage.new(topology: Sourced.topology.map(&:to_h)))
+          component(Components::TopologyPage.new(topology: Sourced.topology.map(&:to_h)))
         end
 
         private
 
         def store
           Sourced.store
-        end
-
-        def phlex(component, status: 200)
-          [status, {'Content-Type' => 'text/html'}, [component.render_in(view_context)]]
-        end
-
-        def datastar
-          @datastar ||= (
-            Datastar.from_rack_env(request.env, view_context:)
-          )
-        end
-
-        def view_context
-          @view_context ||= Components::Component::Helpers.new(request:)
         end
 
         def per_page

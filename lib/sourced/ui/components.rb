@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'phlex'
+require 'sidereal'
 
 module Sourced
   module UI
@@ -10,6 +10,4 @@ module Sourced
   end
 end
 
-require_relative 'components/component'
-require_relative 'components/command'
 require_relative 'components/message_filter'

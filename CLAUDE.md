@@ -32,24 +32,25 @@ bundle exec rake install
 
 ### Module Structure
 
-- **`Sourced::UI`** — Top-level module. Provides `streaming_command_errors` helper for processing commands in web controllers with SSE error streaming, and `configure_from` to sync Datastar executor with Sourced config.
-- **`Sourced::UI::Components`** — General-purpose Phlex components (`Command` for forms with validation error streaming). Uses `Phlex::Kit` for component registration.
-- **`Sourced::UI::Components::DatastarHelpers`** — DSL module providing `_d` builder for composing Datastar directives (event bindings, AJAX actions, signals) as HTML attributes.
-- **`Sourced::UI::Dashboard`** — Rack-based monitoring dashboard app showing event streams, consumer groups, and causation trees.
+- **`Sourced::UI`** — Top-level module. Loads `sidereal` and defines the gem's namespace + `Error` class.
+- **`Sourced::UI::Components::MessageFilter`** — Sourced-specific Phlex component for building event/command filters. Inherits from `Sidereal::Components::BaseComponent`.
+- **`Sourced::UI::Dashboard`** — Rack-based monitoring dashboard app showing event streams, consumer groups, and causation trees. Built on `Sidereal::App`.
+- **`Sourced::UI::Dashboard::{Resume,Stop,Reset}ConsumerGroup`** — Typed `Sidereal::Message`s exposed via `POST /commands` for consumer-group operations.
 
 ### Key Patterns
 
-- **Components** inherit from `Phlex::HTML` and implement `view_template`. Dashboard components access request context via `context.fetch(:view_context)`.
-- **Datastar builder** (`_d`) is an immutable builder — each method returns a new copy. Chain calls like `_d.click.post('/path', retries: 3).signals(foo: 'bar').to_h` to produce HTML attribute hashes.
-- **Dashboard Router** (`Dashboard::Router`) is a Rack app using pattern matching on `request.path_info`. SSE streaming routes use `datastar.stream { |sse| ... }` with `patch_elements` to push Phlex component fragments.
+- **Components** inherit from `Sidereal::Components::BaseComponent` (Phlex::HTML subclass with `_d` Datastar builder and `command` helper already mixed in). Dashboard components call `helpers.url('/path')` — `helpers` returns the current request's `context` (the Sidereal::Router instance with `RequestHelpers#url`).
+- **Layout** (`Sourced::UI::Dashboard::Components::Layout`) inherits from `Sidereal::Components::Layout`, which auto-injects the Datastar `<script>` tag in `head` and builds the `data-signals` body attribute from a page object. Since the dashboard has no per-page object, Layout passes a frozen `NULL_PAGE` (`Data` struct with `page_signals: { modal: false }` and `channel_name: nil`) to `super`.
+- **Datastar builder** (`_d`, from `Sidereal::DatastarHelpers`) is an immutable builder — each method returns a new copy. Chain calls like `_d.click.post('/path', retries: 3).signals(foo: 'bar').to_h` to produce HTML attribute hashes.
+- **Dashboard Service** (`Sourced::UI::Dashboard::Service < Sidereal::App`) is the routed Rack app. `GET` pages render via `component(cmp)`; SSE routes use `datastar.stream { |sse| ... }` with `patch_elements`. `POST /commands` is auto-wired by Sidereal::App — `handle MessageClass do |cmd| ... end` registers the handler.
 - **Causation trees** — `Dashboard.build_causation_tree(events)` converts flat event lists into `Node` trees based on `causation_id` relationships.
 
 ### Dependencies
 
+- **sidereal** — Rack router + reactive UI framework (local path dependency in Gemfile; owns the router, Command component, DatastarHelpers, and Page primitives)
 - **sourced** — Event sourcing framework (local path dependency in Gemfile)
 - **phlex** (~v2.3) — Component-based HTML rendering
-- **datastar** (1.0.1) — Reactive HTML framework for SSE streaming and AJAX
-- **rack** — HTTP server interface
+- **datastar** — Reactive HTML framework for SSE streaming and AJAX
 
 ### Environment Variables
 

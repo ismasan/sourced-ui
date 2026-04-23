@@ -1,13 +1,18 @@
 # frozen_string_literal: true
 
-require 'sourced/ui/dashboard/components/component'
+require 'sidereal'
 
 module Sourced
   module UI
     module Dashboard
       module Components
-        class Layout < Component
+        class Layout < Sidereal::Components::Layout
+          NULL_PAGE = Data.define(:page_signals, :channel_name)
+                          .new(page_signals: { modal: false }, channel_name: nil)
+                          .freeze
+
           def initialize(title: 'Sourced Dashboard')
+            super(NULL_PAGE)
             @title = title
           end
 
@@ -19,10 +24,9 @@ module Sourced
                 meta(name: 'viewport', content: 'width=device-width, initial-scale=1.0')
                 title { @title }
                 link(rel: 'stylesheet', href: helpers.url("/stylesheets/styles.css?r=#{Time.now}"))
-                script(type: "module", src: "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js")
               end
 
-              body(data: { 'signals' => '{"modal": false}' }) do
+              body do
                 div class: 'nav' do
                   if Sourced::UI::Dashboard.configuration.header_links.any?
                     div class: 'link-group custom' do
@@ -50,6 +54,10 @@ module Sourced
               end
             end
           end
+
+          private
+
+          def helpers = context
         end
       end
     end

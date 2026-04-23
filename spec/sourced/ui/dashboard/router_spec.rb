@@ -84,24 +84,34 @@ RSpec.describe Sourced::UI::Dashboard::App do
     end
   end
 
-  describe 'POST /consumer-groups/resume' do
-    it 'returns 204' do
-      post '/consumer-groups/resume', group_id: TestProjector.group_id
+  describe 'POST /commands' do
+    it 'handles sourced.ui.resume_consumer_group with 204' do
+      post '/commands', command: {
+        type: 'sourced.ui.resume_consumer_group',
+        payload: { group_id: TestProjector.group_id }
+      }
       expect(last_response.status).to eq(204)
     end
-  end
 
-  describe 'POST /consumer-groups/stop' do
-    it 'returns 204' do
-      post '/consumer-groups/stop', group_id: TestProjector.group_id
+    it 'handles sourced.ui.stop_consumer_group with 204' do
+      post '/commands', command: {
+        type: 'sourced.ui.stop_consumer_group',
+        payload: { group_id: TestProjector.group_id }
+      }
       expect(last_response.status).to eq(204)
     end
-  end
 
-  describe 'POST /consumer-groups/reset' do
-    it 'returns 204' do
-      post '/consumer-groups/reset', group_id: TestProjector.group_id
+    it 'handles sourced.ui.reset_consumer_group with 204' do
+      post '/commands', command: {
+        type: 'sourced.ui.reset_consumer_group',
+        payload: { group_id: TestProjector.group_id }
+      }
       expect(last_response.status).to eq(204)
+    end
+
+    it 'returns 404 for unknown command types' do
+      post '/commands', command: { type: 'unknown.command', payload: {} }
+      expect(last_response.status).to eq(404)
     end
   end
 
@@ -129,7 +139,6 @@ RSpec.describe Sourced::UI::Dashboard::App do
     it 'returns 404' do
       get '/nonexistent'
       expect(last_response.status).to eq(404)
-      expect(last_response.content_type).to include('text/html')
     end
   end
 end

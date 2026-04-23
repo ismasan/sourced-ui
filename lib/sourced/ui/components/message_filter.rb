@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'sidereal'
+
 module Sourced
   module UI
     module Components
@@ -14,7 +16,7 @@ module Sourced
         Filters = Array[FilterEntry]
       end
 
-      class MessageFilter < Component
+      class MessageFilter < Sidereal::Components::BaseComponent
         # @param filters [Array<FilterEntry>, Array<Hash>] list of filter entries
         # @param available [Enumerator, Array] message classes available to add (for the dropdown)
         # @param action [String, nil] URL to POST to when "Add" is clicked (enables Datastar interaction)

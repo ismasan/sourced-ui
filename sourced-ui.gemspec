@@ -34,11 +34,9 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Uncomment to register a new dependency of your gem
-  spec.add_dependency 'rack'
-  spec.add_dependency 'rack-session'
+  spec.add_dependency 'sidereal'
   spec.add_dependency 'sourced'
   spec.add_dependency 'phlex'
-  spec.add_dependency 'datastar', '~> 1.0.3'
   spec.add_dependency 'logger' # required by Datastar. Should be required there.
 
   # For more information and examples about making a new gem, check out our
