@@ -64,10 +64,8 @@ module Sourced
         end
 
         get '/updates' do
-          Console.warn "EEEEAAA #{url('/uno')} #{request.script_name}"
           stats = store.stats
           datastar.stream do |sse|
-            Console.warn "EEEEAAA #{url('/dos')} #{request.script_name}"
             while true
               sleep 1
               messages = store.read_all(limit: per_page, order: :desc)
@@ -81,7 +79,6 @@ module Sourced
               new_stats = store.stats
               next unless stats != new_stats
 
-              Console.warn "EEEEAAA #{url('/dos')}"
               stats = new_stats
               sse.patch_elements Components::SystemPage::Consumers.new(stats:)
             end
