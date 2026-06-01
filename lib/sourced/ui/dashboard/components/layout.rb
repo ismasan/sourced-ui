@@ -7,9 +7,17 @@ module Sourced
     module Dashboard
       module Components
         class Layout < Sidereal::Components::Layout
-          NULL_PAGE = Data.define(:page_signals, :channel_name)
-                          .new(page_signals: { modal: false }, channel_name: nil)
-                          .freeze
+          # The dashboard is component-based and has no real page, but the
+          # parent Layout reads `page.page_signals` and `page.channel_name`
+          # from whatever it wraps. NullPage satisfies Sidereal::Page's type
+          # contract while supplying the dashboard's defaults: a `modal`
+          # signal and no per-page SSE channel.
+          class NullPage < Sidereal::Page
+            def page_signals = { modal: false }
+            def channel_name = nil
+          end
+
+          NULL_PAGE = NullPage.new
 
           def initialize(title: 'Sourced Dashboard')
             super(NULL_PAGE)
