@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'sourced' # this file references Sourced::Types at load time
 require 'sidereal'
 
 module Sourced

@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# Load the gem's full setup (Sourced + Sidereal) before any dashboard
+# component, so requiring 'sourced/ui/dashboard' is self-sufficient and
+# does not depend on the host app requiring 'sourced' first.
+require 'sourced/ui'
 require 'sourced/ui/dashboard/app'
 
 module Sourced
