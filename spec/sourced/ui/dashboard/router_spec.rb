@@ -17,7 +17,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
   class TestProjector < Sourced::Projector::EventSourced
     partition_by :id
 
-    state do |_partition_values|
+    context do
       {}
     end
 
@@ -32,8 +32,10 @@ RSpec.describe Sourced::UI::Dashboard::App do
 
   before(:all) do
     Sourced.reset!
-    Sourced.configure { |_c| }
+    Sourced.config.config!('store.install_tables') { true }
+    Sourced.config.config!('workers.count') { 0 }
     Sourced.register(TestProjector)
+    Sourced.start!
 
     store = Sourced.store
     events = 3.times.map { TestEvent.new }
@@ -41,6 +43,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
   end
 
   after(:all) do
+    Sourced.teardown!
     Sourced.reset!
   end
 
