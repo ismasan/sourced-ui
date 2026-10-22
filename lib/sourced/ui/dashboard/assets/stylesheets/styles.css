@@ -1498,11 +1498,57 @@ dl.prop-table {
 .chart-card__canvas--plain { padding: 0; background: white; }
 .chart-card__note { margin: 0; padding: 0.5rem 1rem; font-size: 12px; color: var(--slate-500); border-top: 1px solid var(--slate-200); }
 
+.chart-card__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-left: auto;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding-right: 1rem;
+  border-right: 1px solid var(--slate-200);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slate-600);
+  cursor: pointer;
+  user-select: none;
+
+  input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+}
+.switch__track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 9999px;
+  background: var(--slate-300);
+  transition: background-color 0.15s;
+}
+.switch__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+  transition: transform 0.15s;
+}
+.switch input:checked + .switch__track { background: var(--teal-600); }
+.switch input:checked + .switch__track::after { transform: translateX(12px); }
+.switch input:focus-visible + .switch__track { outline: 2px solid var(--teal-400); outline-offset: 2px; }
+
 .em-key {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin: 0 0 0 auto;
+  margin: 0;
   padding: 0;
   list-style: none;
   font-size: 12px;
@@ -1571,6 +1617,13 @@ dl.prop-table {
 .event-model__robot circle:first-of-type { fill: var(--slate-600); stroke: none; }
 .event-model__robot-eye { fill: var(--slate-600); stroke: none; }
 
+/* Payload fields, with schemas */
+.event-model__rule { stroke: currentColor; opacity: 0.25; }
+.event-model__node--command .event-model__rule { stroke: var(--em-command-stroke); opacity: 0.6; }
+.event-model__node--event .event-model__rule { stroke: var(--em-event-stroke); opacity: 0.6; }
+.event-model__field { font-size: 10.5px; font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace; }
+.event-model__type { font-size: 10px; font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace; opacity: 0.65; }
+
 .event-model__edge { fill: none; stroke: var(--slate-400); stroke-width: 1.3; }
 .event-model__arrow { fill: var(--slate-400); }
 
@@ -1582,4 +1635,5 @@ dl.prop-table {
 
 @media (prefers-reduced-motion: reduce) {
   .statechart__box { transition: none; }
+  .switch__track, .switch__track::after { transition: none; }
 }

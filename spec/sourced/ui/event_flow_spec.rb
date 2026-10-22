@@ -4,7 +4,7 @@ require 'spec_helper'
 require 'sourced/ui/components'
 
 RSpec.describe Sourced::UI::EventFlow do
-  def cmd(id, group, produces) = { type: 'command', id:, name: id, group_id: group, produces: }
+  def cmd(id, group, produces, schema: {}) = { type: 'command', id:, name: id, group_id: group, produces:, schema: }
   def evt(id, group) = { type: 'event', id:, name: id, group_id: group, produces: [] }
   def aut(id, group, consumes, produces) = { type: 'automation', id:, name: id, group_id: group, consumes:, produces: }
   def rm(id, group, consumes, produces) = { type: 'readmodel', id:, name: id, group_id: group, consumes:, produces: }
@@ -19,7 +19,15 @@ RSpec.describe Sourced::UI::EventFlow do
       evt('cancelled', 'Booking'),
       aut('confirmed-Reviews-aut', 'Reviews', ['confirmed'], ['request']),
       cmd('request', 'Reviews', ['requested']),
-      cmd('submit', 'Reviews', ['submitted']),
+      cmd('submit', 'Reviews', ['submitted'], schema: {
+        'properties' => {
+          'booking_id' => { 'anyOf' => [{ 'type' => 'string' }, { 'type' => 'string', 'format' => 'uuid' }] },
+          'rating' => { 'type' => 'integer' },
+          'tags' => { 'type' => 'array', 'items' => { 'type' => 'string' } },
+          'mood' => { 'type' => 'string', 'enum' => %w[happy sad] }
+        },
+        'required' => %w[booking_id rating]
+      }),
       cmd('flag', 'Reviews', ['flagged']),
       evt('requested', 'Reviews'),
       evt('submitted', 'Reviews'),
@@ -70,5 +78,26 @@ RSpec.describe Sourced::UI::EventFlow do
     expect(svg).to include('event-model__node--command', 'event-model__node--event', 'event-model__node--readmodel',
                            'event-model__node--automation', 'event-model__robot', 'href="/reactors/Summaries"')
     expect(svg).not_to include('href="/reactors/Reviews"')
+  end
+
+  describe 'with schemas' do
+    let(:model) { Sourced::UI::Components::EventModel }
+    let(:flow) { described_class.build(topology, 'Reviews') }
+
+    it "lists a message's payload fields in its box, optional ones marked" do
+      svg = model.new(flow, schemas: true).call
+
+      expect(svg).to include('>booking_id<', '>uuid<', '>rating<', '>integer<', '>tags?<', '>[string]<', '>mood?<', '>happy|sad<')
+      expect(svg).to include('marker-end="url(#em-arrow-schemas)"')
+    end
+
+    it 'leaves fields out without' do
+      expect(model.new(flow).call).not_to include('>booking_id<')
+    end
+
+    it 'says whether any message has fields to list' do
+      expect(model.schemas?(flow)).to be(true)
+      expect(model.schemas?(described_class.build(topology.map { it.except(:schema) }, 'Reviews'))).to be(false)
+    end
   end
 end

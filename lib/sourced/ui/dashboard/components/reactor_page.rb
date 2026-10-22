@@ -131,19 +131,37 @@ module Sourced
 
             href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
 
-            figure(class: 'chart-card') do
+            schemas = Sourced::UI::Components::EventModel.schemas?(flow)
+            title = "#{@reactor.group_id} event model"
+
+            # Both drawings are rendered; the toggle shows one, without a request.
+            figure(class: 'chart-card', data: { 'signals:schemas' => 'false' }) do
               figcaption(class: 'chart-card__bar') do
                 strong { 'Event model' }
                 span(class: 'muted') { 'What triggers it, what it decides, and what reacts downstream.' }
-                ul(class: 'em-key', aria: { label: 'Key' }) do
-                  li(class: 'em-key__item em-key__item--command') { 'Command' }
-                  li(class: 'em-key__item em-key__item--event') { 'Event' }
-                  li(class: 'em-key__item em-key__item--readmodel') { 'Read model' }
-                  li(class: 'em-key__item em-key__item--automation') { 'Automation' }
+                div(class: 'chart-card__tools') do
+                  if schemas
+                    label(class: 'switch') do
+                      input(type: 'checkbox', role: 'switch', data: { 'bind:schemas' => true })
+                      span(class: 'switch__track', aria: { hidden: 'true' })
+                      plain 'Schemas'
+                    end
+                  end
+                  ul(class: 'em-key', aria: { label: 'Key' }) do
+                    li(class: 'em-key__item em-key__item--command') { 'Command' }
+                    li(class: 'em-key__item em-key__item--event') { 'Event' }
+                    li(class: 'em-key__item em-key__item--readmodel') { 'Read model' }
+                    li(class: 'em-key__item em-key__item--automation') { 'Automation' }
+                  end
                 end
               end
-              div(class: 'chart-card__canvas chart-card__canvas--plain') do
-                render Sourced::UI::Components::EventModel.new(flow, href:, title: "#{@reactor.group_id} event model")
+              div(class: 'chart-card__canvas chart-card__canvas--plain', data: { show: '!$schemas' }) do
+                render Sourced::UI::Components::EventModel.new(flow, href:, title:)
+              end
+              if schemas
+                div(class: 'chart-card__canvas chart-card__canvas--plain', style: 'display: none', data: { show: '$schemas' }) do
+                  render Sourced::UI::Components::EventModel.new(flow, href:, title: "#{title}, with message schemas", schemas: true)
+                end
               end
               if flow.truncated?
                 p(class: 'chart-card__note') { 'The flow goes on further downstream than shown.' }

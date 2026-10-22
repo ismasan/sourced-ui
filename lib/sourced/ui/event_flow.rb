@@ -17,7 +17,8 @@ module Sourced
     # Lanes, top to bottom: automations, commands and read models, then the
     # events of each reactor that appends them, the reactor's own first.
     class EventFlow
-      Node = Data.define(:id, :kind, :name, :group_id, :lane, :column, :own)
+      # +schema+ is the message's payload JSON schema, empty for other nodes.
+      Node = Data.define(:id, :kind, :name, :group_id, :lane, :column, :own, :schema)
       Edge = Data.define(:from, :to)
       Lane = Data.define(:id, :kind, :label)
 
@@ -137,7 +138,7 @@ module Sourced
         @columns.sort_by(&:last).map do |id, column|
           node = @by_id.fetch(id)
           Node.new(id:, kind: node[:type].to_sym, name: node[:name], group_id: node[:group_id],
-                   lane: lane_of(node), column:, own: node[:group_id] == @group_id)
+                   lane: lane_of(node), column:, own: node[:group_id] == @group_id, schema: node[:schema] || {})
         end
       end
 
