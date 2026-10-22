@@ -25,6 +25,7 @@ module Sourced
         LINE_H = 13
         FIELD_H = 13
         MAX_FIELDS = 10
+        SIDEWAYS = 2.0     # how much more an edge's ends lean sideways than the line between its boxes
 
         KIND_LABELS = { command: 'Command', event: 'Event', readmodel: 'Read model', automation: 'Automation' }.freeze
 
@@ -218,12 +219,7 @@ module Sourced
 
           # Arrows meet boxes level with their heads, however tall the boxes.
           path = if to.column > from.column
-                   x1 = fx + @box_w
-                   y1 = fy + BOX_H / 2.0
-                   x2 = tx
-                   y2 = ty + BOX_H / 2.0
-                   dx = [(x2 - x1) / 2.0, 24].max
-                   "M #{x1} #{y1} C #{x1 + dx} #{y1}, #{x2 - dx} #{y2}, #{x2} #{y2}"
+                   forward(fx + @box_w, fy + BOX_H / 2.0, tx, ty + BOX_H / 2.0)
                  else
                    # Back in time (a cycle): under both boxes.
                    x1 = fx + @box_w / 2.0
@@ -234,6 +230,23 @@ module Sourced
                    "M #{x1} #{y1} C #{x1} #{low}, #{x2} #{low}, #{x2} #{y2}"
                  end
           s.path(d: path, class: 'event-model__edge', 'marker-end': "url(##{arrow_id})")
+        end
+
+        # From one box's side to the next's: a curve leaving and arriving along
+        # the line between them, leaning sideways (SIDEWAYS), so its arrowhead
+        # points the way it comes in, even from a lane far above or below.
+        # Its control points reach a third of its length, never back past
+        # either end.
+        def forward(x1, y1, x2, y2)
+          dx = (x2 - x1) * SIDEWAYS
+          dy = y2 - y1
+          length = Math.hypot(dx, dy)
+          hx = dx / length
+          hy = dy / length
+          reach = Math.hypot(x2 - x1, y2 - y1) / 3
+          c1x = (x1 + hx * reach).clamp(x1, x2)
+          c2x = (x2 - hx * reach).clamp(x1, x2)
+          "M #{x1} #{y1} C #{c1x} #{y1 + hy * reach}, #{c2x} #{y2 - hy * reach}, #{x2} #{y2}"
         end
 
         def position(node)
