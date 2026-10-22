@@ -55,6 +55,24 @@ RSpec.describe Sourced::UI::Components::Statechart do
     expect(svg).not_to match(/is-live"><path[^>]*marker-end="url\(#sc-arrow\)"/)
   end
 
+  describe 'a transition that starts child machines' do
+    let(:chart) do
+      state = ->(id, on = {}) { { id:, key: id, type: 'atomic', after: [], always: [], mounts: [], status: nil, on: } }
+      log_in = { kind: 'command', event: 'spec.log_in', label: 'LogIn', targets: ['b'], starts: %w[App::Session App::Audit] }
+      { machine: 'Spec', initial: 'a', states: { 'a' => state.('a', { 'log_in' => log_in }), 'b' => state.('b') } }
+    end
+
+    it 'links each machine it starts to its page, where href gives one' do
+      svg = described_class.new(chart, href: ->(id) { "/reactors/#{id}" if id == 'App::Session' }).call
+
+      expect(svg).to include('LogIn / starts <a href="/reactors/App::Session" class="statechart__link"><tspan>Session</tspan></a>, Audit</text>')
+    end
+
+    it 'says which, without links, given no href' do
+      expect(described_class.new(chart).call).to include('>LogIn / starts Session, Audit</text>')
+    end
+  end
+
   it 'draws a chart with nothing in it' do
     expect(render({ machine: 'Empty', initial: nil, states: {} })).to include('<svg', 'Empty statechart')
   end

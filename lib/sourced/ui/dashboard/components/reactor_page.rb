@@ -230,7 +230,8 @@ module Sourced
                 a(href: base_href, class: 'chart-card__clear', data: travel(base_href)) { 'Clear selection' } if @row
               end
               div(class: 'chart-card__canvas', data: { 'on:click' => pick }) do
-                render Sourced::UI::Components::Statechart.new(chart, title: "#{@reactor.group_id} statechart")
+                href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
+                render Sourced::UI::Components::Statechart.new(chart, title: "#{@reactor.group_id} statechart", href:)
               end
               details(class: 'chart-card__legend') do
                 summary { 'Legend' }

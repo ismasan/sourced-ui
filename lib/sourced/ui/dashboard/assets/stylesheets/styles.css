@@ -1480,6 +1480,8 @@ dl.prop-table {
   stroke-linejoin: round;
 }
 .statechart__edge.is-live .statechart__edge-label { fill: var(--teal-700); font-weight: 600; }
+.statechart__link tspan { fill: var(--teal-700); text-decoration: underline; cursor: pointer; }
+.statechart__link:hover tspan { fill: var(--teal-600); }
 
 /* Event model: Sourced::UI::Components::EventModel */
 :root {

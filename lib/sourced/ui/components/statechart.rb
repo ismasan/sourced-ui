@@ -56,7 +56,10 @@ module Sourced
           def bottom = y + h
         end
 
-        Edge = Data.define(:from, :to, :label, :kind)
+        # +starts+: the group_ids of the child machines it starts.
+        Edge = Data.define(:from, :to, :label, :kind, :starts) do
+          def initialize(starts: [], **) = super
+        end
         # An edge laid out in a region, between the region's children holding its ends.
         # An edge into the region from the checkpoint it belongs to comes +from+ an
         # Entry: a point at the region's top.
@@ -67,8 +70,11 @@ module Sourced
 
         # @param chart [Hash] Machine#to_h or Machine.to_h
         # @param title [String] accessible name for the drawing
-        def initialize(chart, title: nil)
+        # @param href [#call, nil] a child machine's URL from its group_id, or nil
+        #   for none: the machines a transition starts link to it
+        def initialize(chart, title: nil, href: nil)
           @chart = chart
+          @href = href
           @title = title || "#{chart[:machine]} statechart"
           @escalations = escalations_in(chart)
           @boxes = {}
@@ -367,11 +373,13 @@ module Sourced
             Array(state[:on]&.values).each do |transition|
               label = transition_label(transition)
               if transition[:targets].empty?
-                edges << Edge.new(from: state[:id], to: state[:id], label:, kind: live ? :data_live : :data)
+                edges << Edge.new(from: state[:id], to: state[:id], label:, kind: live ? :data_live : :data,
+                                  starts: Array(transition[:starts]))
               else
                 transition[:targets].each do |target|
                   to, label = @histories.key?(target) ? [@histories[target], "#{label} (#{history_mark(target)})"] : [target, label]
-                  edges << Edge.new(from: state[:id], to: reentry(state[:id], to), label:, kind: live ? :live : :command)
+                  edges << Edge.new(from: state[:id], to: reentry(state[:id], to), label:, kind: live ? :live : :command,
+                                    starts: Array(transition[:starts]))
                 end
               end
             end
@@ -491,8 +499,29 @@ module Sourced
 
         def draw_label(s, edge, (_, (x, y, anchor)))
           s.g(class: edge_classes(edge)) do
-            s.text(x:, y:, class: 'statechart__edge-label', 'text-anchor': anchor) { edge.label }
+            s.text(x:, y:, class: 'statechart__edge-label', 'text-anchor': anchor) do
+              linked = @href && edge.starts.any?
+              linked ? label_with_links(s, edge) : edge.label
+            end
           end
+        end
+
+        # The label, the machines it starts (`LogIn / starts Session`) each a
+        # link to its page where +href+ gives one.
+        def label_with_links(s, edge)
+          names = edge.starts.map { it.split('::').last }
+          starting = " / starts #{names.join(', ')}"
+          at = edge.label.index(starting) || raise(ArgumentError, "#{edge.label.inspect} doesn't say it #{starting.strip}")
+          s.plain "#{edge.label[0...at]} / starts "
+          edge.starts.zip(names).each_with_index do |(id, name), i|
+            s.plain ', ' if i.positive?
+            if (url = @href.call(id))
+              s.a(href: url, class: 'statechart__link') { s.tspan { name } }
+            else
+              s.plain name
+            end
+          end
+          s.plain edge.label[(at + starting.length)..]
         end
 
         def live?(edge) = (edge.kind in :live | :data_live)
