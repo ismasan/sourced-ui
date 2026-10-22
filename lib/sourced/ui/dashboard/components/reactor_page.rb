@@ -233,10 +233,24 @@ module Sourced
                 href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
                 render Sourced::UI::Components::Statechart.new(chart, title: "#{@reactor.group_id} statechart", href:)
               end
-              details(class: 'chart-card__legend') do
-                summary { 'Legend' }
-                render Sourced::UI::Components::StatechartLegend.new
+              div(class: 'chart-card__foot', data: { 'signals:copied' => "''" }) do
+                details(class: 'chart-card__legend') do
+                  summary { 'Legend' }
+                  render Sourced::UI::Components::StatechartLegend.new
+                end
+                copy_mermaid
               end
+            end
+          end
+
+          # The machine as a Mermaid state diagram, to the clipboard. Where the
+          # browser won't allow it (not over HTTPS, say), the button says so.
+          def copy_mermaid
+            copy = "(navigator.clipboard ? navigator.clipboard.writeText(el.dataset.mermaid) : Promise.reject())" \
+                   ".then(() => $copied = 'yes', () => $copied = 'no'); setTimeout(() => $copied = '', 2000)"
+            label = "$copied == 'yes' ? 'Copied' : $copied == 'no' ? 'Copy failed' : 'Copy Mermaid code'"
+            button(type: 'button', class: 'btn chart-card__copy', data: { mermaid: @reactor.to_mermaid, 'on:click' => copy, text: label }) do
+              'Copy Mermaid code'
             end
           end
 

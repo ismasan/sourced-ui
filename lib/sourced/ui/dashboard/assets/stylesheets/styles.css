@@ -1392,6 +1392,18 @@ dl.prop-table {
   summary { cursor: pointer; color: var(--slate-600); font-weight: 500; }
 }
 
+/* Below a statechart: its legend, and copying it as Mermaid. */
+.chart-card__foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  border-top: 1px solid var(--slate-200);
+  padding: 0.6rem 1rem;
+
+  .chart-card__legend { flex: 1; border: 0; padding: 0; }
+}
+.chart-card__copy { flex: none; }
+
 .legend {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));

@@ -162,6 +162,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
       body = last_response.body
       expect(body).to include('kind-badge--machine', 'class="statechart"', 'Transitions')
       expect(body).to include('/reactors/SpecLight/states/on"', '>Dim<')
+      expect(body).to include('data-mermaid="stateDiagram-v2', '>Copy Mermaid code<')
       expect(body).not_to match(/is-active" id="sc-/)
     end
 
