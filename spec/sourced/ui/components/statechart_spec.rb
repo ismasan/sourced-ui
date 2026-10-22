@@ -50,6 +50,30 @@ RSpec.describe Sourced::UI::Components::Statechart do
 
     live = svg.scan(/is-live"><text[^>]*>([^<]+)</).flatten
     expect(live).to contain_exactly('Cancel', 'ChooseHotel')
+    # Their lines too, with the live arrowhead.
+    expect(svg.scan(/is-live"><path[^>]*marker-end="url\(#sc-arrow-live\)"/).size).to eq(2)
+    expect(svg).not_to match(/is-live"><path[^>]*marker-end="url\(#sc-arrow\)"/)
+  end
+
+  it 'draws a chart with nothing in it' do
+    expect(render({ machine: 'Empty', initial: nil, states: {} })).to include('<svg', 'Empty statechart')
+  end
+
+  # p is parallel, with one region r: initial ─Go─▶ x, and x ─Reset─▶ p.
+  it "re-enters a parallel checkpoint from inside it at the start of the region it's in" do
+    state = ->(id, type, on = {}) { { id:, key: id.split('.').last, type:, after: [], on:, always: [], mounts: [], status: nil } }
+    cmd = ->(label, target) { { kind: 'command', event: "spec.#{label.downcase}", label:, targets: [target], starts: [] } }
+    region = { id: 'p.r', key: 'r', initial: 'p.r.initial', states: {
+      'initial' => state.('p.r.initial', 'initial', { 'go' => cmd.('Go', 'p.r.x') }),
+      'x' => state.('p.r.x', 'atomic', { 'reset' => cmd.('Reset', 'p') })
+    } }
+    chart = { machine: 'Spec', initial: 'p', states: { 'p' => state.('p', 'parallel').merge(states: { 'r' => region }) } }
+    statechart = described_class.new(chart)
+
+    reset = statechart.instance_variable_get(:@placed).fetch([:region, 'p.r']).find { it.edge.label == 'Reset' }
+    expect(reset.to).to eq('p.r.initial')
+    expect(statechart.instance_variable_get(:@direct)).to be_empty
+    expect(statechart.call).to include('>Reset<')
   end
 end
 

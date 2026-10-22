@@ -66,6 +66,24 @@ RSpec.describe Sourced::UI::LayeredLayout do
     expect(flat.routes.fetch(0).flat).to be_nil
   end
 
+  it "runs a straight edge under the left node's extra, its label past it" do
+    looped = described_class::Node.new(id: :a, w: 100, h: 30, extra: 60, round: false)
+    layout = described_class.new([node(:s), looped, node(:b)], [edge(0, :s, :a), edge(1, :s, :b), edge(2, :a, :b, 'Across')], starts: [:s])
+    route = layout.routes.fetch(2)
+    a = layout.boxes.fetch(:a)
+    skip 'a and b were not laid out side by side' unless route.flat == :straight
+
+    expect(route.points.map(&:last).uniq).to eq([a.y + 15 + described_class::LOOP_CLEARANCE])
+    expect(route.label[0] - 'Across'.size * 3).to be >= a.x + 100 + 60
+  end
+
+  it 'lays out nothing to nothing' do
+    empty = described_class.new([], [])
+
+    expect([empty.width, empty.height, empty.boxes, empty.routes]).to eq([0, 0, {}, {}])
+    expect { described_class.new([], [edge(0, :a, :b)]) }.to raise_error(ArgumentError, /need nodes/)
+  end
+
   it "draws one under the rank when its ends can't be neighbours" do
     # b, c and d in one rank, an edge between each pair: one pair isn't side by side.
     nodes = %i[a b c d].map { node(it) }

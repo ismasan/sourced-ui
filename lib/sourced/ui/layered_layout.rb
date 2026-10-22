@@ -46,6 +46,7 @@ module Sourced
       PASSING_GAP = 14     # between a node and an edge passing it
       THIN = 2
       FLAT_SPACE = 28      # around the label of an edge drawn straight across
+      LOOP_CLEARANCE = 11  # how far below the middle an edge runs past a node's +extra+ (see #straight)
       PORT_MARGIN = 10
       PORT_GAP = 9
       SWEEPS = 8
@@ -77,11 +78,18 @@ module Sourced
       attr_reader :width, :height, :boxes, :routes
 
       # @param nodes [Array<Node>]
-      # @param edges [Array<Edge>] none from a node to itself
+      # @param edges [Array<Edge>] none from a node to itself, and none without nodes
       # @param starts [Array] the nodes ranks start from (the first node, if none of them is one)
       # @param tops [Array] nodes above even those
       def initialize(nodes, edges, starts: [], tops: [])
-        raise ArgumentError, 'a layout needs nodes' if nodes.empty?
+        if nodes.empty?
+          raise ArgumentError, 'edges need nodes to run between' if edges.any?
+
+          @width = @height = 0
+          @boxes = {}
+          @routes = {}
+          return
+        end
 
         @nodes = nodes
         @edges = edges
@@ -282,8 +290,8 @@ module Sourced
           sides = Hash.new { |h, k| h[k] = [] }
           @chains.each do |id, chain|
             case @flat[id]
-            when :straight then next
-            when :under
+            in :straight then next
+            in :under
               # Each end on the side facing the other, so the curve is a U.
               a, _, b = chain
               sides[[a.id, :bottom]] << [[id, :a], b.anchor]
@@ -319,8 +327,8 @@ module Sourced
 
       def route(edge, chain)
         case @flat[edge.id]
-        when :straight then straight(edge)
-        when :under
+        in :straight then straight(edge)
+        in :under
           # Down from one end, across through the label layer, and up into the
           # other: lowest midway between them, the label in its slot below.
           a, d, b = chain
@@ -354,16 +362,24 @@ module Sourced
       # Side to side, level with the nodes' middles. Two edges between the same
       # pair, one each way, run apart: the rightward one above, its label over
       # it, the leftward one below, its label under it.
+      #
+      # Past the left node's +extra+ (drawn above its middle, as a statechart's
+      # self-loops are) they run LOOP_CLEARANCE lower, under it. Either way the
+      # label sits in the gap beyond the +extra+, which #straighten_flat sized
+      # for it.
       def straight(edge)
         a = @v.fetch(edge.from)
         b = @v.fetch(edge.to)
         rightward = a.x < b.x
+        left, right = rightward ? [a, b] : [b, a]
         both_ways = @edges.any? { it.from == edge.to && it.to == edge.from && @flat[it.id] == :straight }
-        y = (a.y + a.h / 2.0 + b.y + b.h / 2.0) / 2.0
-        y += rightward ? -5 : 5 if both_ways
+        middle = (a.y + a.h / 2.0 + b.y + b.h / 2.0) / 2.0
+        apart = both_ways ? (rightward ? -5 : 5) : 0
+        y = left.node.extra.positive? ? middle + LOOP_CLEARANCE + apart / 2.0 : middle + apart
         x1 = rightward ? a.x + a.w : a.x
         x2 = rightward ? b.x : b.x + b.w
-        Route.new(points: [[x1, y], [x2, y]], label: [(x1 + x2) / 2.0, rightward ? y - 6 : y + 13],
+        label_x = (left.x + left.slot_w + right.x) / 2.0
+        Route.new(points: [[x1, y], [x2, y]], label: [label_x, rightward ? y - 6 : y + 13],
                   anchor: 'middle', flat: :straight)
       end
     end

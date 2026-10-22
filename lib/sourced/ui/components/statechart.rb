@@ -41,6 +41,7 @@ module Sourced
         GAP_X = 18
         LOOP = 26          # how far a self-transition loops out
         LOOP_STEP = 10     # how much further each next one on the same checkpoint does
+        LOOP_RISE = 7      # how far above a checkpoint's middle its loops sit, clear of edges passing under (LayeredLayout::LOOP_CLEARANCE)
         ARC_MIN = 16       # how far the shortest arc over or under a row reaches
         EDGE_CHAR_W = 6.0  # the same, for arrow labels
         LABEL_H = 12
@@ -48,8 +49,7 @@ module Sourced
 
         # +extra+ is room kept free to the right of a box, for its self-loops' labels.
         # A region's +layout+ places its children; +origin+ is where it starts.
-        Box = Struct.new(:kind, :data, :key, :w, :h, :x, :y, :children, :extra, :layout, :edges, :origin, keyword_init: true) do
-          def slot_w = w + extra.to_i
+        Box = Struct.new(:kind, :data, :w, :h, :x, :y, :children, :extra, :layout, :edges, :origin, keyword_init: true) do
           def cx = x + w / 2.0
           def cy = y + h / 2.0
           def right = x + w
@@ -72,15 +72,17 @@ module Sourced
           @title = title || "#{chart[:machine]} statechart"
           @escalations = escalations_in(chart)
           @boxes = {}
-          @compounds = {}     # node id => the compound checkpoint it's inside
           @histories = {}     # a parallel checkpoint's history node id => the checkpoint's id
           @parent_region = {} # node id => the key of the region it's in
           @region_owner = {}  # region key => the checkpoint it belongs to (nil for the root)
+          @region_start = {}  # region key => its initial position
           index(chart, ROOT, nil)
           @placed = Hash.new { |h, k| h[k] = [] } # region key => its Placements
           @loops = []
           @direct = []
           (collect_edges(@chart) + escalation_edges).each { assign(it) }
+          # Laid out by what's drawn: after history and re-entry targets resolve.
+          @loops_on = @loops.group_by(&:from)
         end
 
         def view_template
@@ -113,7 +115,7 @@ module Sourced
             drawings = regions(root).flat_map do |region|
               region.edges.map { |placement, route| [placement.edge, routed(region, placement, route)] }
             end
-            @loops.group_by(&:from).each do |id, loops|
+            @loops_on.each do |id, loops|
               loops.each_with_index { |edge, i| drawings << [edge, self_loop(@boxes.fetch(id), i, loops.size)] }
             end
             @direct.each { |edge| drawings << [edge, route(@boxes.fetch(edge.from), @boxes.fetch(edge.to))] }
@@ -130,15 +132,15 @@ module Sourced
 
         def index(region, key, owner)
           @region_owner[key] = owner
+          @region_start[key] = region[:initial]
           region[:states].each_value do |state|
             @parent_region[state[:id]] = key
             case state[:type]
-            when 'parallel'
+            in 'parallel'
               history_nodes(state).each { @histories[it[:id]] = state[:id] }
               regions_of(state).each { index(it, [:region, it[:id]], state[:id]) }
-            when 'compound'
-              state[:states].each_value { |sub| @compounds[sub[:id]] = state }
-              index(state, [:compound, state[:id]], state[:id])
+            in 'compound' then index(state, [:compound, state[:id]], state[:id])
+            else nil
             end
           end
         end
@@ -161,10 +163,11 @@ module Sourced
         def assign(edge)
           return @loops << edge if edge.from == edge.to
 
-          into, to = lineage(edge.to).find { |key, _| @region_owner.fetch(key) == edge.from }
+          to_lineage = lineage(edge.to)
+          into, to = to_lineage.find { |key, _| @region_owner.fetch(key) == edge.from }
           return @placed[into] << Placement.new(edge:, from: Entry.new(@placed[into].size), to:) if into
 
-          targets = lineage(edge.to).to_h
+          targets = to_lineage.to_h
           lineage(edge.from).each do |key, from|
             next unless (to = targets[key])
             return @direct << edge if from == to
@@ -194,7 +197,7 @@ module Sourced
           head = kind == :region ? REGION_HEAD : 0
           pad = kind == :region ? PAD : 0
           name_w = kind == :region ? region[:key].to_s.length * CHAR_W + 20 : 0
-          Box.new(kind:, data: region, key:, children:, layout:,
+          Box.new(kind:, data: region, children:, layout:,
                   edges: placements.each_with_index.map { |p, i| [p, layout.routes.fetch(i)] },
                   w: [layout.width + pad * 2, name_w].max, h: head + layout.height + pad * 2)
         end
@@ -207,9 +210,9 @@ module Sourced
                    { w: HISTORY_R * 2, h: HISTORY_R * 2, children: [] }
                  in 'parallel'
                    regions = regions_of(state).map { |region| layout_region(region, [:region, region[:id]], :region) }
-                   w = regions.sum(&:w) + GAP_X * (regions.size - 1) + PAD * 2
+                   w = regions.sum(&:w) + GAP_X * [regions.size - 1, 0].max + PAD * 2
                    w = [w, label_width(state) + PAD * 2].max
-                   { w:, h: PARALLEL_HEAD + regions.map(&:h).max + PAD, children: regions }
+                   { w:, h: PARALLEL_HEAD + (regions.map(&:h).max || 0) + PAD, children: regions }
                  in 'compound'
                    inner = layout_region({ id: state[:id], key: state[:key], initial: state[:initial], states: state[:states] },
                                          [:compound, state[:id]], :compound_region)
@@ -218,23 +221,14 @@ module Sourced
                  else
                    { w: label_width(state), h: NODE_H, children: [] }
                  end
-          loops = transitions(state).filter_map { |label, target| label if target == state[:id] }
-          extra = loops.any? ? LOOP + LOOP_STEP * (loops.size - 1) + loops.map { |label| text_width(label) }.max + 8 : 0
+          loops = @loops_on.fetch(state[:id], [])
+          extra = loops.any? ? LOOP + LOOP_STEP * (loops.size - 1) + loops.map { text_width(it.label) }.max + 8 : 0
           @boxes[state[:id]] = Box.new(**size, kind: state[:type].to_sym, data: state, extra:)
         end
 
         def label_width(state)
           timer = state[:after].any? ? 52 : 0
           [(state[:key].length * CHAR_W) + NODE_PAD * 2 + timer, 72].max
-        end
-
-        # [label, target id] for each arrow out of +state+. A data-only command
-        # stays where it is, so it's drawn as a loop.
-        def transitions(state)
-          eventless(state) + Array(state[:on]&.values).flat_map do |t|
-            label = transition_label(t)
-            t[:targets].empty? ? [[label, state[:id]]] : t[:targets].map { |target| [label, target] }
-          end
         end
 
         # [label, target id] for each transition the machine takes by itself from
@@ -268,7 +262,7 @@ module Sourced
           box.y = y
 
           case box.kind
-          when :root, :region, :compound_region
+          in :root | :region | :compound_region
             head = box.kind == :region ? REGION_HEAD : 0
             pad = box.kind == :region ? PAD : 0
             # Centred, in a region its name makes wider than its layout.
@@ -277,13 +271,14 @@ module Sourced
               at = box.layout.boxes.fetch(child.data[:id])
               place(child, box.origin[0] + at.x, box.origin[1] + at.y)
             end
-          when :parallel, :compound
-            used = box.children.sum(&:w) + GAP_X * (box.children.size - 1)
+          in :parallel | :compound
+            used = box.children.sum(&:w) + GAP_X * [box.children.size - 1, 0].max
             col_x = x + (box.w - used) / 2.0
             box.children.each do |region|
               place(region, col_x, y + PARALLEL_HEAD)
               col_x += region.w + GAP_X
             end
+          else nil
           end
         end
 
@@ -322,19 +317,19 @@ module Sourced
           s.g(class: classes.join(' '), id: "sc-#{node_dom_id(state[:id])}") do
             s.title { node_title(state) }
             case box.kind
-            when :initial
+            in :initial
               s.circle(cx: box.cx, cy: box.cy, r: DOT, class: 'statechart__dot')
-            when :history
+            in :history
               s.circle(cx: box.cx, cy: box.cy, r: HISTORY_R, class: 'statechart__history')
               s.text(x: box.cx, y: box.cy + 4, class: 'statechart__label', 'text-anchor': 'middle') do
                 state[:history] == 'deep' ? 'H*' : 'H'
               end
-            when :parallel
+            in :parallel
               s.rect(x: box.x, y: box.y, width: box.w, height: box.h, rx: 14, class: 'statechart__box')
               s.text(x: box.x + 14, y: box.y + 20, class: 'statechart__label') { state[:key] }
               s.text(x: box.right - 14, y: box.y + 20, class: 'statechart__hint', 'text-anchor': 'end') { 'parallel' }
               box.children.each { |region| draw_region(s, region) }
-            when :compound
+            in :compound
               s.rect(x: box.x, y: box.y, width: box.w, height: box.h, rx: 14, class: 'statechart__box')
               s.text(x: box.x + 14, y: box.y + 20, class: 'statechart__label') { state[:key] }
               s.text(x: box.right - 14, y: box.y + 20, class: 'statechart__hint', 'text-anchor': 'end') { compound_name(state) }
@@ -382,8 +377,9 @@ module Sourced
             end
             eventless(state).each { |label, target| edges << Edge.new(from: state[:id], to: target, label:, kind: :done) }
             case state[:type]
-            when 'parallel' then regions_of(state).each { |child| collect_edges(child, edges) }
-            when 'compound' then collect_edges(state, edges)
+            in 'parallel' then regions_of(state).each { |child| collect_edges(child, edges) }
+            in 'compound' then collect_edges(state, edges)
+            else nil
             end
           end
           edges
@@ -412,15 +408,11 @@ module Sourced
         def history_nodes(state) = state[:states].values.select { it[:type] == 'history' }
         def history_mark(id) = id.end_with?('$deep_history') ? 'H*' : 'H'
 
-        # A target that contains +from+ is re-entered at its start.
+        # A target that contains +from+ is re-entered at the start of the region
+        # +from+ is in: a compound checkpoint's, or a parallel one's region.
         def reentry(from, target)
-          compound = @compounds[from]
-          while compound
-            return compound[:initial] if compound[:id] == target
-
-            compound = @compounds[compound[:id]]
-          end
-          target
+          key, = lineage(from).find { |k, _| @region_owner.fetch(k) == target }
+          (key && @region_start.fetch(key)) || target
         end
 
         # An edge its region laid out: the region's route, from and to the
@@ -452,7 +444,7 @@ module Sourced
 
         def path(points, flat)
           case flat
-          when :straight
+          in :straight
             (x1, y1), (x2, y2) = points
             "M #{f x1} #{f y1} L #{f x2} #{f y2}"
           else spline(points) # under a row too: through its lowest point
@@ -463,16 +455,17 @@ module Sourced
         # point in between heading from the point before to the one after, so it
         # sweeps rather than bending at each, and at its ends heading along its
         # first and last stretches, so arrowheads point the way the line comes
-        # in. Ends lean upright (UPRIGHT), meeting boxes from above or below. Each segment's control points reach a third of
-        # its own length along those headings, so a short segment beside a
-        # long one doesn't overshoot, and stay level with the segment, so it
-        # never doubles back up or down.
+        # in. Ends lean upright (UPRIGHT), meeting boxes from above or below.
+        # Each segment's control points reach a third of its own length along
+        # those headings, so a short segment beside a long one doesn't
+        # overshoot, and stay level with the segment, so it never doubles back
+        # up or down.
         def spline(points)
           last = points.size - 1
           headings = points.each_index.map do |i|
             dx, dy = case i
-                     when 0 then [points[1][0] - points[0][0], (points[1][1] - points[0][1]) * UPRIGHT]
-                     when last then [points[last][0] - points[last - 1][0], (points[last][1] - points[last - 1][1]) * UPRIGHT]
+                     in 0 then [points[1][0] - points[0][0], (points[1][1] - points[0][1]) * UPRIGHT]
+                     in ^last then [points[last][0] - points[last - 1][0], (points[last][1] - points[last - 1][1]) * UPRIGHT]
                      else [points[i + 1][0] - points[i - 1][0], points[i + 1][1] - points[i - 1][1]]
                      end
             length = Math.hypot(dx, dy)
@@ -502,7 +495,7 @@ module Sourced
           end
         end
 
-        def live?(edge) = %i[live data_live].include?(edge.kind)
+        def live?(edge) = (edge.kind in :live | :data_live)
 
         def edge_classes(edge)
           ['statechart__edge', "statechart__edge--#{edge.kind}", ('is-live' if live?(edge))].compact.join(' ')
@@ -579,7 +572,11 @@ module Sourced
         # reaching further out, their labels stacked beside the outermost.
         def self_loop(box, index, count)
           x = box.right
-          y = (box.kind in :parallel | :compound) ? box.y + 18 : box.cy
+          y = case box.kind
+              in :parallel | :compound then box.y + 18
+              in :initial | :history then box.cy
+              else box.cy - LOOP_RISE
+              end
           out = LOOP + LOOP_STEP * index
           path = "M #{f x} #{f(y - 6)} C #{f(x + out)} #{f(y - 18)}, #{f(x + out)} #{f(y + 18)}, #{f x} #{f(y + 6)}"
           label_y = y + 4 + (index - (count - 1) / 2.0) * 13
