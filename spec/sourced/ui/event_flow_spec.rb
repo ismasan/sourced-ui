@@ -63,6 +63,15 @@ RSpec.describe Sourced::UI::EventFlow do
     expect(flow.nodes.first(4).map(&:id)).to eq(%w[request requested submit submitted])
   end
 
+  it 'stacks the events a node may append in one column' do
+    flow = described_class.build([cmd('pay', 'Booking', %w[paid declined]), evt('paid', 'Booking'), evt('declined', 'Booking')], 'Booking')
+    paid, declined = %w[paid declined].map { |id| flow.nodes.find { it.id == id } }
+
+    expect([paid.column, declined.column]).to eq([1, 1])
+    expect([paid.row, declined.row]).to eq([0, 1])
+    expect(flow.lanes.find { it.kind == :event }.rows).to eq(2)
+  end
+
   it 'stops a long flow, and says so' do
     chain = (0...12).flat_map { |i| [cmd("c#{i}", 'Long', ["e#{i}"]), evt("e#{i}", 'Long'), aut("a#{i}", 'Next', ["e#{i}"], ["c#{i + 1}"])] }
     flow = described_class.build(chain, 'Long')
@@ -78,6 +87,24 @@ RSpec.describe Sourced::UI::EventFlow do
     expect(svg).to include('event-model__node--command', 'event-model__node--event', 'event-model__node--readmodel',
                            'event-model__node--automation', 'event-model__robot', 'href="/reactors/Summaries"')
     expect(svg).not_to include('href="/reactors/Reviews"')
+  end
+
+  it 'names classes by as much of their namespace as tells them apart' do
+    started = %w[X Bluesky].map { |child| { type: 'event', id: "#{child.downcase}.started", name: "Connections::#{child}::Started", group_id: 'Account', produces: [] } }
+    flow = described_class.build([cmd('connect', 'Account', %w[x.started bluesky.started]), *started], 'Account')
+    svg = Sourced::UI::Components::EventModel.new(flow).call
+
+    expect(svg).to include('>X::Started<', '>Bluesky::Started<', '>connect<')
+    expect(svg).not_to include('>Started<', 'event-model__name">Connections::')
+  end
+
+  it "names a machine part's state event for the part" do
+    active = { type: 'event', id: 'account.active', name: 'Account::Active::State', group_id: 'Account', produces: [], transition: true }
+    flow = described_class.build([cmd('reinstate', 'Account', %w[account.active]), active], 'Account')
+    svg = Sourced::UI::Components::EventModel.new(flow).call
+
+    expect(svg).to include('event-model__name">Active<')
+    expect(svg).not_to include('event-model__name">State<')
   end
 
   describe 'with schemas' do

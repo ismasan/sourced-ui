@@ -126,19 +126,22 @@ module Sourced
           end
 
           def render_flow
-            flow = EventFlow.build(@topology.call, @reactor.group_id)
+            event_model_card(EventFlow.build(@topology.call, @reactor.group_id),
+                             title: "#{@reactor.group_id} event model",
+                             lead: 'What triggers it, what it decides, and what reacts downstream.')
+          end
+
+          def event_model_card(flow, title:, lead:)
             return if flow.empty?
 
             href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
-
             schemas = Sourced::UI::Components::EventModel.schemas?(flow)
-            title = "#{@reactor.group_id} event model"
 
             # Both drawings are rendered; the toggle shows one, without a request.
             figure(class: 'chart-card', data: { 'signals:schemas' => 'false' }) do
               figcaption(class: 'chart-card__bar') do
                 strong { 'Event model' }
-                span(class: 'muted') { 'What triggers it, what it decides, and what reacts downstream.' }
+                span(class: 'muted') { lead }
                 div(class: 'chart-card__tools') do
                   if schemas
                     label(class: 'switch') do
@@ -325,6 +328,12 @@ module Sourced
                 end
               end
             end
+
+            event_model_card(
+              MachineSlice.build(@reactor, @row.path, @topology.call),
+              title: "#{@reactor.group_id} in #{@row.path}, event model",
+              lead: "What it takes in #{@row.name}, what that appends, and what reacts downstream."
+            )
           end
 
           def transitions(list, refused: false)

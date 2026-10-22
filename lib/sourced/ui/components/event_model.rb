@@ -18,7 +18,8 @@ module Sourced
         BOX_W = 128
         SCHEMA_BOX_W = 184
         BOX_H = 64         # a box's head: kind, name, reactor
-        LANE_PAD = 14      # above and below the tallest box in a lane
+        LANE_PAD = 14      # above and below a lane's boxes
+        ROW_GAP = 10       # between a lane's rows
         PAD = 16
         CHAR_W = 6.4       # average glyph width of a box's name
         FIELD_CHAR_W = 5.8 # the same, for fields
@@ -41,10 +42,12 @@ module Sourced
           @box_w = schemas ? SCHEMA_BOX_W : BOX_W
           @col_w = @box_w + GAP_X
           @nodes = flow.nodes.to_h { [it.id, it] }
-          @lane_h = flow.lanes.to_h do |lane|
-            tallest = flow.nodes.select { it.lane == lane.id }.map { box_h(it) }.max || BOX_H
-            [lane.id, tallest + LANE_PAD * 2]
+          @short = short_paths(flow.nodes)
+          # Each row of a lane as tall as its tallest box.
+          @row_h = flow.lanes.to_h do |lane|
+            [lane.id, (0...lane.rows).map { |row| flow.nodes.select { it.lane == lane.id && it.row == row }.map { box_h(it) }.max || BOX_H }]
           end
+          @lane_h = @row_h.transform_values { |rows| rows.sum + ROW_GAP * (rows.size - 1) + LANE_PAD * 2 }
           top = 0
           @lane_y = flow.lanes.to_h { |lane| [lane.id, top].tap { top += @lane_h.fetch(lane.id) } }
         end
@@ -143,8 +146,10 @@ module Sourced
               lines.each_with_index do |line, i|
                 s.text(x: x + 8, y: y + 33 + i * LINE_H, class: 'event-model__name') { line }
               end
-              if caption?(node)
-                s.text(x: x + 8, y: y + head_h(node) - 7, class: 'event-model__group') { truncate(node.group_id, @box_w - 16, 10 / 11.5) }
+              if (text = foot(node))
+                s.text(x: x + 8, y: y + head_h(node) - 7, class: "event-model__#{node.tags.any? ? 'tags' : 'group'}") do
+                  truncate(text, @box_w - 16, 10 / 11.5)
+                end
               end
               draw_fields(s, node, x, y) if @schemas
             end
@@ -183,6 +188,7 @@ module Sourced
         # The box's full name and type, and with schemas its fields uncut.
         def tooltip(node)
           text = "#{KIND_LABELS.fetch(node.kind)}: #{node.name}\n#{node.id}\nfrom #{node.group_id}"
+          text += "\n#{node.tags.join(' ')}" if node.tags.any?
           return text unless @schemas
 
           fields = self.class.fields_of(node.schema).map { |name, type, required| "\n  #{name}#{'?' unless required}: #{type}" }
@@ -194,13 +200,21 @@ module Sourced
           !node.own && node.kind != :event && display_name(node) != node.group_id.split('::').last
         end
 
+        # The line at a box's foot: what else it leads to (its tags), or the
+        # reactor it belongs to.
+        def foot(node)
+          if node.tags.any? then node.tags.join(' ')
+          elsif caption?(node) then node.group_id
+          end
+        end
+
         # A box's head: the same for every box, or with schemas only as tall as
         # its name and caption, so its fields follow straight on.
         def head_h(node)
           return BOX_H unless @schemas
 
           lines = short_lines(display_name(node), @box_w - 16, 2).size
-          22 + lines * LINE_H + (caption?(node) ? 14 : 0) + 6
+          22 + lines * LINE_H + (foot(node) ? 14 : 0) + 6
         end
 
         # A box's height: its head, and with schemas its fields.
@@ -250,7 +264,8 @@ module Sourced
         end
 
         def position(node)
-          [LABEL_W + PAD + node.column * @col_w, @lane_y.fetch(node.lane) + LANE_PAD]
+          above = @row_h.fetch(node.lane).first(node.row).sum + ROW_GAP * node.row
+          [LABEL_W + PAD + node.column * @col_w, @lane_y.fetch(node.lane) + LANE_PAD + above]
         end
 
         # A robot's head, for automations: 14 wide, 13 high.
@@ -264,11 +279,31 @@ module Sourced
           end
         end
 
-        # Class names lose their namespaces, and a reaction reads as what it's
-        # on: reaction(HolidayBooking::BookingConfirmed) is on BookingConfirmed.
+        # A class name, as in CrossPost::Connections::X::Started.
+        CLASS_PATH = /\b[A-Z]\w*(?:::[A-Z]\w*)+\b/
+
+        # Class names lose as much of their namespace as the drawing lets them,
+        # and a reaction reads as what it's on: reaction(HolidayBooking::BookingConfirmed)
+        # is on BookingConfirmed.
         def display_name(node)
-          name = node.kind == :readmodel ? node.name.split('::').last : node.name.gsub(/(?:\w+::)+(\w+)/, '\1')
-          name.sub(/\Areaction\((.+)\)\z/, 'on \1')
+          node.name.gsub(CLASS_PATH) { @short.fetch(it) }.sub(/\Areaction\((.+)\)\z/, 'on \1')
+        end
+
+        # Each class name in the drawing => its shortest tail no other class
+        # name in it shares: the four children's Started read X::Started,
+        # Bluesky::Started and so on, a name of its own just its last part.
+        # A machine part's state event (CrossPost::Account::Active::State) is
+        # named for the part, as the state it moves into: Active.
+        def short_paths(nodes)
+          parts_states = nodes.select { it.transition && it.name.end_with?('::State') }.map(&:name)
+          named = ->(path) { parts_states.include?(path) ? path.delete_suffix('::State') : path }
+          paths = nodes.flat_map { it.name.scan(CLASS_PATH) }.uniq
+          paths.to_h do |path|
+            parts = named.(path).split('::')
+            others = (paths - [path]).map { named.(it).split('::') }
+            size = (1..parts.size).find { |n| others.none? { it.last(n) == parts.last(n) } } || parts.size
+            [path, parts.last(size).join('::')]
+          end
         end
 
         # +text+ in up to +max+ lines of +width+, broken at spaces, and at camel

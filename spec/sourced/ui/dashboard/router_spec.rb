@@ -171,6 +171,8 @@ RSpec.describe Sourced::UI::Dashboard::App do
       body = last_response.body
       expect(body).to match(/is-active" id="sc-on"/)
       expect(body).to include('Accepts', 'Refuses', '>Install<')
+      # What it takes there, as an event model: Dim appends Dimmed and stays.
+      expect(body).to include('class="event-model"', '>Dimmed<', '>stays<')
     end
 
     it "streams updates to the reactor's consumer group card" do
