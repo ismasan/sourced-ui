@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'sidereal'
+require 'sourced/ui/layered_layout'
 
 module Sourced
   module UI
@@ -9,14 +10,19 @@ module Sourced
       # Machine#to_h returns (Machine.to_h for the definition alone). Works for
       # any machine: it lays out whatever regions and checkpoints the Hash has.
       #
-      # Layout: each region stacks its checkpoints in rows, ranked by how many
-      # transitions they are from the region's initial position, so most arrows
-      # point down. A parallel checkpoint draws its regions side by side inside
-      # its box, nested as deep as they go. Arrows are drawn last, over the
-      # boxes, from absolute positions.
+      # Layout: each region lays out its checkpoints with a LayeredLayout, top
+      # to bottom from its initial position, its transitions routed between
+      # them with their labels in slots of their own. A parallel checkpoint
+      # draws its regions side by side inside its box, and a compound one its
+      # sub-states, nested as deep as they go.
       #
-      # A compound checkpoint (a machine part's) draws its sub-states inside
-      # its box, starting at its start checkpoint. An arrow from inside a
+      # A transition belongs to the innermost region holding both its ends: one
+      # from a checkpoint nested in a compound checkpoint to that checkpoint's
+      # sibling (a part's on_final) leaves through the compound's border, and one
+      # from a checkpoint into a region of its own drops in from the region's
+      # top, from an entry point laid out alongside the region's start. One
+      # between the regions of a parallel checkpoint has no region to be laid
+      # out in, and is drawn directly between its ends. An arrow from inside a
       # compound checkpoint back to it re-enters it, so it's drawn to its start.
       #
       # With an instance's status, the active checkpoints are lit, visited ones
@@ -28,18 +34,21 @@ module Sourced
         NODE_PAD = 14
         DOT = 8            # radius of a region's initial position
         HISTORY_R = 13     # radius of a history pseudo-state
-        GAP_X = 18
-        GAP_Y = 46         # room for an arrow and its label between rows
+        GAP_Y = 46         # how far an arc between neighbours may reach
         PAD = 14
         REGION_HEAD = 22
         PARALLEL_HEAD = 30
+        GAP_X = 18
         LOOP = 26          # how far a self-transition loops out
+        LOOP_STEP = 10     # how much further each next one on the same checkpoint does
         ARC_MIN = 16       # how far the shortest arc over or under a row reaches
         EDGE_CHAR_W = 6.0  # the same, for arrow labels
+        LABEL_H = 12
+        UPRIGHT = 4.0      # how much more an edge's ends lean upright than its first and last stretches
 
         # +extra+ is room kept free to the right of a box, for its self-loops' labels.
-        # +gaps+ is the space between neighbours in each row of a region.
-        Box = Struct.new(:kind, :data, :w, :h, :x, :y, :children, :rows, :gaps, :extra, keyword_init: true) do
+        # A region's +layout+ places its children; +origin+ is where it starts.
+        Box = Struct.new(:kind, :data, :key, :w, :h, :x, :y, :children, :extra, :layout, :edges, :origin, keyword_init: true) do
           def slot_w = w + extra.to_i
           def cx = x + w / 2.0
           def cy = y + h / 2.0
@@ -48,6 +57,13 @@ module Sourced
         end
 
         Edge = Data.define(:from, :to, :label, :kind)
+        # An edge laid out in a region, between the region's children holding its ends.
+        # An edge into the region from the checkpoint it belongs to comes +from+ an
+        # Entry: a point at the region's top.
+        Placement = Data.define(:edge, :from, :to)
+        Entry = Data.define(:index)
+
+        ROOT = [:root].freeze
 
         # @param chart [Hash] Machine#to_h or Machine.to_h
         # @param title [String] accessible name for the drawing
@@ -56,14 +72,20 @@ module Sourced
           @title = title || "#{chart[:machine]} statechart"
           @escalations = escalations_in(chart)
           @boxes = {}
-          @compounds = {} # node id => the compound checkpoint it's inside
-          @histories = {} # a parallel checkpoint's history node id => the checkpoint's id
+          @compounds = {}     # node id => the compound checkpoint it's inside
+          @histories = {}     # a parallel checkpoint's history node id => the checkpoint's id
+          @parent_region = {} # node id => the key of the region it's in
+          @region_owner = {}  # region key => the checkpoint it belongs to (nil for the root)
+          index(chart, ROOT, nil)
+          @placed = Hash.new { |h, k| h[k] = [] } # region key => its Placements
+          @loops = []
+          @direct = []
+          (collect_edges(@chart) + escalation_edges).each { assign(it) }
         end
 
         def view_template
-          root = layout_region(@chart, root: true)
+          root = layout_region(@chart, ROOT, :root)
           place(root, 0, 0)
-          edges = collect_edges(@chart) + escalation_edges
 
           svg(
             id: 'statechart',
@@ -88,40 +110,93 @@ module Sourced
             end
 
             draw_region_contents(s, root)
-            edges.each { |edge| draw_edge(s, edge) }
+            drawings = regions(root).flat_map do |region|
+              region.edges.map { |placement, route| [placement.edge, routed(region, placement, route)] }
+            end
+            @loops.group_by(&:from).each do |id, loops|
+              loops.each_with_index { |edge, i| drawings << [edge, self_loop(@boxes.fetch(id), i, loops.size)] }
+            end
+            @direct.each { |edge| drawings << [edge, route(@boxes.fetch(edge.from), @boxes.fetch(edge.to))] }
+            # Every label over every line: a line passing under one is hidden
+            # by its halo there, rather than striking through it.
+            drawings.each { |edge, drawing| draw_line(s, edge, drawing) }
+            drawings.each { |edge, drawing| draw_label(s, edge, drawing) }
           end
         end
 
         private
 
-        # ---- Layout: sizes, relative to each box's own origin ----
+        # ---- The chart's nesting: which region each checkpoint is in ----
 
-        def layout_region(region, root: false, kind: root ? :root : :region)
-          states = region[:states].values
-          ranks = rank(region, states)
-          rows = states.group_by { |state| ranks.fetch(state[:id]) }.sort.map do |_, members|
-            members.map { |state| layout_node(state) }
+        def index(region, key, owner)
+          @region_owner[key] = owner
+          region[:states].each_value do |state|
+            @parent_region[state[:id]] = key
+            case state[:type]
+            when 'parallel'
+              history_nodes(state).each { @histories[it[:id]] = state[:id] }
+              regions_of(state).each { index(it, [:region, it[:id]], state[:id]) }
+            when 'compound'
+              state[:states].each_value { |sub| @compounds[sub[:id]] = state }
+              index(state, [:compound, state[:id]], state[:id])
+            end
           end
-          gaps = rows.map { |row| row_gap(row, ranks) }
-
-          head = root ? 0 : REGION_HEAD
-          pad = root ? 0 : PAD
-          inner_w = rows.zip(gaps).map { |row, gap| row_width(row, gap) }.max || 0
-          inner_h = rows.sum { |row| row.map(&:h).max } + GAP_Y * [rows.size - 1, 0].max
-
-          Box.new(kind:, data: region, rows:, gaps:, children: rows.flatten,
-                  w: inner_w + pad * 2, h: head + inner_h + pad * 2)
         end
 
-        def row_width(row, gap) = row.sum(&:slot_w) + gap * (row.size - 1)
-
-        # Wide enough for the label of an arrow between two checkpoints of a row.
-        def row_gap(row, ranks)
-          ids = row.map { |box| box.data[:id] }
-          labels = row.flat_map do |box|
-            transitions(box.data).filter_map { |label, target| label if target != box.data[:id] && ids.include?(target) }
+        # [region key, child holding it], from the region +id+ is in outwards.
+        def lineage(id)
+          out = []
+          while id
+            key = @parent_region.fetch(id)
+            out << [key, id]
+            id = @region_owner.fetch(key)
           end
-          [GAP_X, *labels.map { |label| text_width(label) + 28 }].max
+          out
+        end
+
+        # A self-transition loops on its checkpoint. One from a checkpoint into
+        # a region of its own enters it from the top. Any other goes to the
+        # innermost region holding both its ends as different children, or,
+        # between a parallel checkpoint's regions, straight between them.
+        def assign(edge)
+          return @loops << edge if edge.from == edge.to
+
+          into, to = lineage(edge.to).find { |key, _| @region_owner.fetch(key) == edge.from }
+          return @placed[into] << Placement.new(edge:, from: Entry.new(@placed[into].size), to:) if into
+
+          targets = lineage(edge.to).to_h
+          lineage(edge.from).each do |key, from|
+            next unless (to = targets[key])
+            return @direct << edge if from == to
+
+            return @placed[key] << Placement.new(edge:, from:, to:)
+          end
+          @direct << edge
+        end
+
+        # ---- Layout: sizes, relative to each box's own origin ----
+
+        def layout_region(region, key, kind)
+          children = region[:states].values.map { |state| layout_node(state) }
+          # Joins first, so ranks follow the main path, then commands in definition order.
+          placements = @placed[key].each_with_index.sort_by { |p, i| [p.edge.kind == :done ? 0 : 1, i] }.map(&:first)
+          nodes = children.map do |box|
+            LayeredLayout::Node.new(id: box.data[:id], w: box.w, h: box.h, extra: box.extra.to_i,
+                                    round: (box.kind in :initial | :history))
+          end
+          entries = placements.map(&:from).grep(Entry)
+          nodes += entries.map { LayeredLayout::Node.new(id: it, w: 2, h: 2, extra: 0, round: true) }
+          edges = placements.each_with_index.map do |p, i|
+            LayeredLayout::Edge.new(id: i, from: p.from, to: p.to, label_w: text_width(p.edge.label) + 4, label_h: LABEL_H)
+          end
+          layout = LayeredLayout.new(nodes, edges, starts: [region[:initial]], tops: entries)
+
+          head = kind == :region ? REGION_HEAD : 0
+          pad = kind == :region ? PAD : 0
+          name_w = kind == :region ? region[:key].to_s.length * CHAR_W + 20 : 0
+          Box.new(kind:, data: region, key:, children:, layout:,
+                  edges: placements.each_with_index.map { |p, i| [p, layout.routes.fetch(i)] },
+                  w: [layout.width + pad * 2, name_w].max, h: head + layout.height + pad * 2)
         end
 
         def layout_node(state)
@@ -131,22 +206,20 @@ module Sourced
                  in 'history'
                    { w: HISTORY_R * 2, h: HISTORY_R * 2, children: [] }
                  in 'parallel'
-                   history_nodes(state).each { @histories[it[:id]] = state[:id] }
-                   regions = regions_of(state).map { |region| layout_region(region) }
-                   w = row_width(regions, GAP_X) + PAD * 2
+                   regions = regions_of(state).map { |region| layout_region(region, [:region, region[:id]], :region) }
+                   w = regions.sum(&:w) + GAP_X * (regions.size - 1) + PAD * 2
                    w = [w, label_width(state) + PAD * 2].max
                    { w:, h: PARALLEL_HEAD + regions.map(&:h).max + PAD, children: regions }
                  in 'compound'
-                   state[:states].each_value { |sub| @compounds[sub[:id]] = state }
                    inner = layout_region({ id: state[:id], key: state[:key], initial: state[:initial], states: state[:states] },
-                                         root: true, kind: :compound_region)
+                                         [:compound, state[:id]], :compound_region)
                    head = label_width(state) + compound_name(state).length * CHAR_W + PAD * 2
                    { w: [inner.w + PAD * 2, head].max, h: PARALLEL_HEAD + inner.h + PAD, children: [inner] }
                  else
                    { w: label_width(state), h: NODE_H, children: [] }
                  end
           loops = transitions(state).filter_map { |label, target| label if target == state[:id] }
-          extra = loops.any? ? LOOP + loops.map { |label| text_width(label) }.max + 8 : 0
+          extra = loops.any? ? LOOP + LOOP_STEP * (loops.size - 1) + loops.map { |label| text_width(label) }.max + 8 : 0
           @boxes[state[:id]] = Box.new(**size, kind: state[:type].to_sym, data: state, extra:)
         end
 
@@ -155,35 +228,10 @@ module Sourced
           [(state[:key].length * CHAR_W) + NODE_PAD * 2 + timer, 72].max
         end
 
-        # Rows: breadth-first from the initial position, following transitions
-        # that stay in this region. A checkpoint reached by nothing goes last.
-        def rank(region, states)
-          ids = states.to_h { |state| [state[:id], state] }
-          ranks = { region[:initial] => 0 }
-          queue = [region[:initial]]
-          while (id = queue.shift)
-            next_ids(ids.fetch(id)).each do |target|
-              next unless ids.key?(target) && !ranks.key?(target)
-
-              ranks[target] = ranks.fetch(id) + 1
-              queue << target
-            end
-          end
-          last = (ranks.values.max || 0) + 1
-          states.each { |state| ranks[state[:id]] ||= last }
-          ranks
-        end
-
-        # The main path first: a join, then commands in definition order.
-        def next_ids(state) = transitions(state).map(&:last)
-
         # [label, target id] for each arrow out of +state+. A data-only command
-        # stays where it is, so it's drawn as a loop. A compound checkpoint's
-        # escalations count as its own, for ranking.
+        # stays where it is, so it's drawn as a loop.
         def transitions(state)
-          done = eventless(state)
-          done += escalations_out_of(state).map { |to| ['on_final', to] } if state[:type] == 'compound'
-          done + Array(state[:on]&.values).flat_map do |t|
+          eventless(state) + Array(state[:on]&.values).flat_map do |t|
             label = transition_label(t)
             t[:targets].empty? ? [[label, state[:id]]] : t[:targets].map { |target| [label, target] }
           end
@@ -223,24 +271,26 @@ module Sourced
           when :root, :region, :compound_region
             head = box.kind == :region ? REGION_HEAD : 0
             pad = box.kind == :region ? PAD : 0
-            row_y = y + head + pad
-            box.rows.zip(box.gaps).each do |row, gap|
-              row_h = row.map(&:h).max
-              col_x = x + (box.w - row_width(row, gap)) / 2.0
-              row.each do |child|
-                place(child, col_x, row_y + (row_h - child.h) / 2.0)
-                col_x += child.slot_w + gap
-              end
-              row_y += row_h + GAP_Y
+            # Centred, in a region its name makes wider than its layout.
+            box.origin = [x + (box.w - box.layout.width) / 2.0, y + head + pad]
+            box.children.each do |child|
+              at = box.layout.boxes.fetch(child.data[:id])
+              place(child, box.origin[0] + at.x, box.origin[1] + at.y)
             end
           when :parallel, :compound
-            used = row_width(box.children, GAP_X)
+            used = box.children.sum(&:w) + GAP_X * (box.children.size - 1)
             col_x = x + (box.w - used) / 2.0
             box.children.each do |region|
               place(region, col_x, y + PARALLEL_HEAD)
               col_x += region.w + GAP_X
             end
           end
+        end
+
+        # Every region box under +box+, +box+ first if it's one.
+        def regions(box)
+          own = (box.kind in :root | :region | :compound_region) ? [box] : []
+          own + box.children.flat_map { regions(it) }
         end
 
         # ---- Drawing ----
@@ -351,16 +401,10 @@ module Sourced
           end
         end
 
-        def escalations_out_of(compound)
-          prefix = "#{compound[:id]}."
-          @escalations.filter_map { |from, to| to if from.start_with?(prefix) && !to.start_with?(prefix) }.uniq
-        end
-
         def escalation_edges
           @escalations.map { |from, to| Edge.new(from:, to:, label: 'on_final', kind: :done) }
         end
 
-        # A target that contains +from+ is re-entered at its start.
         # A parallel checkpoint's regions. Its history node, if anything targets
         # one, sits among them in +states+; it isn't drawn: arrows to it go to
         # the checkpoint, marked (H) or (H*).
@@ -368,6 +412,7 @@ module Sourced
         def history_nodes(state) = state[:states].values.select { it[:type] == 'history' }
         def history_mark(id) = id.end_with?('$deep_history') ? 'H*' : 'H'
 
+        # A target that contains +from+ is re-entered at its start.
         def reentry(from, target)
           compound = @compounds[from]
           while compound
@@ -378,27 +423,95 @@ module Sourced
           target
         end
 
-        def draw_edge(s, edge)
-          from = @boxes.fetch(edge.from)
-          to = @boxes.fetch(edge.to)
-          path, label_at = route(from, to)
-          live = %i[live data_live].include?(edge.kind)
-          classes = ['statechart__edge', "statechart__edge--#{edge.kind}"]
-          classes << 'is-live' if live
+        # An edge its region laid out: the region's route, from and to the
+        # children holding its ends, reaching on into them for ends nested deeper.
+        def routed(region, placement, route)
+          ox, oy = region.origin
+          points = route.points.map { |x, y| [ox + x, oy + y] }
+          label = route.label && [ox + route.label[0], oy + route.label[1]]
+          edge = placement.edge
+          flat = route.flat
+          if Entry === placement.from
+            # From the region's top edge: its border, or its compound's head.
+            points.unshift([points.first[0], region.y - (region.kind == :region ? 0 : 6)])
+          elsif edge.from != placement.from
+            points.unshift(edge_point(@boxes.fetch(edge.from), points.first))
+            flat = nil
+          end
+          if edge.to != placement.to
+            points.push(edge_point(@boxes.fetch(edge.to), points.last))
+            flat = nil
+          end
+          [path(points, flat), [*label, route.anchor]]
+        end
 
-          s.g(class: classes.join(' ')) do
-            s.path(d: path, 'marker-end': "url(#sc-#{live ? 'arrow-live' : 'arrow'})")
-            s.text(x: label_at[0], y: label_at[1], class: 'statechart__edge-label', 'text-anchor': label_at[2]) do
-              edge.label
-            end
+        # Where a line towards +point+ leaves or reaches +box+: its bottom or top.
+        def edge_point(box, point)
+          [box.cx, point[1] > box.cy ? box.bottom : box.y]
+        end
+
+        def path(points, flat)
+          case flat
+          when :straight
+            (x1, y1), (x2, y2) = points
+            "M #{f x1} #{f y1} L #{f x2} #{f y2}"
+          else spline(points) # under a row too: through its lowest point
           end
         end
 
-        # A path between two boxes, and where its label goes: [x, y, anchor].
+        # A smooth curve through every point, as Bézier segments: through each
+        # point in between heading from the point before to the one after, so it
+        # sweeps rather than bending at each, and at its ends heading along its
+        # first and last stretches, so arrowheads point the way the line comes
+        # in. Ends lean upright (UPRIGHT), meeting boxes from above or below. Each segment's control points reach a third of
+        # its own length along those headings, so a short segment beside a
+        # long one doesn't overshoot, and stay level with the segment, so it
+        # never doubles back up or down.
+        def spline(points)
+          last = points.size - 1
+          headings = points.each_index.map do |i|
+            dx, dy = case i
+                     when 0 then [points[1][0] - points[0][0], (points[1][1] - points[0][1]) * UPRIGHT]
+                     when last then [points[last][0] - points[last - 1][0], (points[last][1] - points[last - 1][1]) * UPRIGHT]
+                     else [points[i + 1][0] - points[i - 1][0], points[i + 1][1] - points[i - 1][1]]
+                     end
+            length = Math.hypot(dx, dy)
+            length.zero? ? [0.0, 0.0] : [dx / length, dy / length]
+          end
+          points.each_cons(2).with_index.reduce("M #{f points[0][0]} #{f points[0][1]}") do |d, (((x1, y1), (x2, y2)), i)|
+            reach = Math.hypot(x2 - x1, y2 - y1) / 3
+            (hx1, hy1), (hx2, hy2) = headings[i], headings[i + 1]
+            low, high = [y1, y2].minmax
+            c1y = (y1 + hy1 * reach).clamp(low, high)
+            c2y = (y2 - hy2 * reach).clamp(low, high)
+            d + " C #{f(x1 + hx1 * reach)} #{f c1y}, #{f(x2 - hx2 * reach)} #{f c2y}, #{f x2} #{f y2}"
+          end
+        end
+
+        # A +drawing+ is [path, [label x, label y, anchor]]. Its line and label
+        # are drawn apart, each in a group with the edge's classes.
+        def draw_line(s, edge, (d, _))
+          s.g(class: edge_classes(edge)) do
+            s.path(d:, 'marker-end': "url(#sc-#{live?(edge) ? 'arrow-live' : 'arrow'})")
+          end
+        end
+
+        def draw_label(s, edge, (_, (x, y, anchor)))
+          s.g(class: edge_classes(edge)) do
+            s.text(x:, y:, class: 'statechart__edge-label', 'text-anchor': anchor) { edge.label }
+          end
+        end
+
+        def live?(edge) = %i[live data_live].include?(edge.kind)
+
+        def edge_classes(edge)
+          ['statechart__edge', "statechart__edge--#{edge.kind}", ('is-live' if live?(edge))].compact.join(' ')
+        end
+
+        # A path between two boxes no region lays out (between a parallel
+        # checkpoint's regions), and where its label goes: [path, [x, y, anchor]].
         def route(from, to)
-          if from.equal?(to)
-            self_loop(from)
-          elsif to.y >= from.bottom - 1
+          if to.y >= from.bottom - 1
             # Straight down where the boxes overlap horizontally, so arrows
             # leaving a wide box don't share a starting point.
             x1 = to.cx.clamp(from.x + 12, [from.right - 12, from.x + 12].max)
@@ -462,11 +575,15 @@ module Sourced
           [path, [(x1 + x2) / 2.0, label_y, 'middle']]
         end
 
-        def self_loop(box)
+        # The +index+th of a checkpoint's +count+ self-loops: nested, each
+        # reaching further out, their labels stacked beside the outermost.
+        def self_loop(box, index, count)
           x = box.right
           y = (box.kind in :parallel | :compound) ? box.y + 18 : box.cy
-          path = "M #{f x} #{f(y - 6)} C #{f(x + LOOP)} #{f(y - 18)}, #{f(x + LOOP)} #{f(y + 18)}, #{f x} #{f(y + 6)}"
-          [path, [x + LOOP - 2, y + 4, 'start']]
+          out = LOOP + LOOP_STEP * index
+          path = "M #{f x} #{f(y - 6)} C #{f(x + out)} #{f(y - 18)}, #{f(x + out)} #{f(y + 18)}, #{f x} #{f(y + 6)}"
+          label_y = y + 4 + (index - (count - 1) / 2.0) * 13
+          [path, [x + LOOP + LOOP_STEP * (count - 1) - 2, label_y, 'start']]
         end
 
         # The part's name: its checkpoints are defined in it.

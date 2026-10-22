@@ -48,7 +48,7 @@ RSpec.describe Sourced::UI::Components::Statechart do
     expect(svg).to match(/statechart__region is-done" id="sc-region-planning.flight"/)
     expect(svg).not_to match(/is-active" id="sc-checkout/)
 
-    live = svg.scan(/is-live"><path[^>]*><\/path><text[^>]*>([^<]+)</).flatten
+    live = svg.scan(/is-live"><text[^>]*>([^<]+)</).flatten
     expect(live).to contain_exactly('Cancel', 'ChooseHotel')
   end
 end
@@ -80,6 +80,6 @@ RSpec.describe Sourced::UI::MachineChart do
     expect(svg).to match(/is-active" id="sc-checkout"/)
     expect(svg).to match(/is-active" id="sc-checkout-paying"/)
     expect(svg).not_to match(/is-active" id="sc-planning"/)
-    expect(svg).to match(/is-live"><path[^>]*><\/path><text[^>]*>Pay</)
+    expect(svg).to match(/is-live"><text[^>]*>Pay</)
   end
 end
