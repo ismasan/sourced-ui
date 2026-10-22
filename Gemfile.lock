@@ -6,9 +6,8 @@ GIT
       kramdown
       kramdown-parser-gfm
 
-GIT
-  remote: https://github.com/ismasan/sidereal.git
-  revision: a796e8d1ee30cba327f5f864807bd23f73a7a97d
+PATH
+  remote: ../sidereal
   specs:
     sidereal (0.1.0)
       async
@@ -22,10 +21,8 @@ GIT
       sourced-message (>= 0.4.0)
       tsort
 
-GIT
-  remote: https://github.com/ismasan/sourced.git
-  revision: 876e0ab495be8ed113a80b70f9ac8bd50b016b84
-  branch: statecharts
+PATH
+  remote: ../sourced
   specs:
     sourced (0.0.1)
       async
