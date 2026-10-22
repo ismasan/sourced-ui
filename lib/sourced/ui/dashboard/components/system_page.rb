@@ -7,8 +7,10 @@ module Sourced
     module Dashboard
       module Components
         class SystemPage < Component
-          def initialize(stats:, messages: [])
+          # @param registered [Array<String>] the group_ids of the reactors registered now
+          def initialize(stats:, registered:, messages: [])
             @stats = stats
+            @registered = registered
             @messages = messages
           end
 
@@ -17,7 +19,7 @@ module Sourced
               div id: 'container' do
                 div id: 'main' do
                   h1 { 'Sourced Dashboard' }
-                  render Consumers.new(stats: @stats)
+                  render Consumers.new(stats: @stats, registered: @registered)
                 end
                 div id: 'sidebar' do
                   render Components::MessageList.recent(messages: @messages)
@@ -55,9 +57,10 @@ module Sourced
           end
 
           class Consumers < Component
-            def initialize(stats:)
+            def initialize(stats:, registered:)
               @tip = stats.max_position
               @groups = stats.groups
+              @registered = registered
             end
 
             def view_template
@@ -74,7 +77,7 @@ module Sourced
                 end
 
                 @groups.each do |group|
-                  render GroupCard.new(group:, tip: @tip)
+                  render GroupCard.new(group:, tip: @tip, registered: @registered.include?(group[:group_id]))
                 end
               end
             end
@@ -82,13 +85,18 @@ module Sourced
 
           # A consumer group's status, controls and how far through the log
           # it is. Its name links to the reactor's page unless +link+ is false.
+          #
+          # A group no registered reactor has (its class is gone, its offsets
+          # left in the store) is drawn greyed out, with nothing to act on: no
+          # controls, no link.
           class GroupCard < Component
             # The card's element id, which updates patch by.
             def self.dom_id(group_id) = "group-#{group_id.gsub(/[^A-Za-z0-9_-]/, '-')}"
 
-            def initialize(group:, tip:, link: true)
+            def initialize(group:, tip:, link: true, registered: true)
               @group = group
-              @link = link
+              @link = link && registered
+              @registered = registered
               oldest = group[:oldest_processed]
               newest = group[:newest_processed]
               @min = oldest.positive? ? ((oldest.to_f / tip) * 100) : 0
@@ -97,7 +105,10 @@ module Sourced
 
             def view_template
               group = @group
-              status_class = group[:retry_at] ? 'retrying' : group[:status]
+              status_class = if !@registered then 'unregistered'
+                             elsif group[:retry_at] then 'retrying'
+                             else group[:status]
+                             end
               div(id: self.class.dom_id(group[:group_id]), class: ['stream-container', "consumer-#{status_class}"]) do
                 div(class: 'stream-label') do
                   strong do
@@ -106,29 +117,18 @@ module Sourced
                     else
                       span { group[:group_id] }
                     end
-                    span(class: 'status') do
-                      span { group[:status] }
-                      if group[:retry_at]
-                        span { " (retrying at #{group[:retry_at]})" }
+                    if @registered
+                      span(class: 'status') do
+                        span { group[:status] }
+                        if group[:retry_at]
+                          span { " (retrying at #{group[:retry_at]})" }
+                        end
                       end
+                    else
+                      span(class: 'status', title: 'No registered reactor has this group: these are its stored offsets') { 'not registered' }
                     end
                   end
-                  if group[:status] == 'stopped' || group[:status] == 'failed'
-                    command Dashboard::ResumeConsumerGroup do |f|
-                      f.payload_fields(group_id: group[:group_id])
-                      button(type: 'submit', class: 'btn btn-resume') { 'Resume' }
-                    end
-                  else
-                    command Dashboard::StopConsumerGroup do |f|
-                      f.payload_fields(group_id: group[:group_id])
-                      button(type: 'submit', class: 'btn btn-stop') { 'Stop' }
-                    end
-                  end
-
-                  command Dashboard::ResetConsumerGroup do |f|
-                    f.payload_fields(group_id: group[:group_id])
-                    button(type: 'submit', class: 'btn btn-reset') { 'Reset' }
-                  end
+                  render_controls(group) if @registered
                   small { " (#{group[:partition_count]} partitions)" }
                   if group[:status] == 'failed' && group[:error_context]&.any?
                     small(class: 'error-context') do
@@ -147,6 +147,25 @@ module Sourced
                     div(class: 'tooltip') { group[:newest_processed] }
                   end
                 end
+              end
+            end
+
+            private def render_controls(group)
+              if group[:status] == 'stopped' || group[:status] == 'failed'
+                command Dashboard::ResumeConsumerGroup do |f|
+                  f.payload_fields(group_id: group[:group_id])
+                  button(type: 'submit', class: 'btn btn-resume') { 'Resume' }
+                end
+              else
+                command Dashboard::StopConsumerGroup do |f|
+                  f.payload_fields(group_id: group[:group_id])
+                  button(type: 'submit', class: 'btn btn-stop') { 'Stop' }
+                end
+              end
+
+              command Dashboard::ResetConsumerGroup do |f|
+                f.payload_fields(group_id: group[:group_id])
+                button(type: 'submit', class: 'btn btn-reset') { 'Reset' }
               end
             end
           end

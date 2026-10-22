@@ -60,6 +60,7 @@ module Sourced
           messages = store.read_all(limit: per_page, order: :desc)
           component(Components::SystemPage.new(
             stats: store.stats,
+            registered: registered_groups,
             messages:
           ))
         end
@@ -81,7 +82,7 @@ module Sourced
               next unless stats != new_stats
 
               stats = new_stats
-              sse.patch_elements Components::SystemPage::Consumers.new(stats:)
+              sse.patch_elements Components::SystemPage::Consumers.new(stats:, registered: registered_groups)
             end
           end
         end
@@ -224,6 +225,10 @@ module Sourced
         def store
           Sourced.store
         end
+
+        # The group_ids of the reactors registered now. The store keeps the
+        # offsets of any it has had, those whose classes have gone too.
+        def registered_groups = Sourced.router.reactors.map(&:group_id)
 
         def per_page
           50

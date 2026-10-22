@@ -148,6 +148,16 @@ RSpec.describe Sourced::UI::Dashboard::App do
       expect(last_response.body).to include('/reactors/TestProjector"', '/reactors/SpecLight"')
     end
 
+    it "greys out a stored group no registered reactor has, with nothing to act on" do
+      Sourced.store.register_consumer_group('Legacy::Payroll')
+      get '/'
+      card = last_response.body[/<div id="group-Legacy--Payroll".*?<\/div><\/div><\/div>/m]
+
+      expect(card).to include('consumer-unregistered', '>not registered<')
+      expect(card).not_to include('<form', '<a ')
+      expect(last_response.body).to include('href="http://example.org/reactors/TestProjector"')
+    end
+
     it "shows a reactor's consumer group and the messages it handles" do
       get '/reactors/TestProjector'
       expect(last_response.status).to eq(200)

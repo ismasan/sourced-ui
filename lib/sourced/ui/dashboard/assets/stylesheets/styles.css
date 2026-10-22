@@ -341,7 +341,8 @@ h2 {
 .consumer-active,
 .consumer-retrying,
 .consumer-stopped,
-.consumer-failed {
+.consumer-failed,
+.consumer-unregistered {
   background: var(--slate-50);
   border: 1px solid var(--slate-200);
   border-radius: 8px;
@@ -415,6 +416,18 @@ h2 {
     font-size: 12px;
     margin-top: 0.25rem;
   }
+}
+
+/* A group no registered reactor has: stored offsets, nothing to act on. */
+.consumer-unregistered {
+  border-style: dashed;
+  opacity: 0.6;
+  .stream-label strong { color: var(--slate-500); }
+  .status {
+    color: var(--slate-600);
+    background: var(--slate-200);
+  }
+  .stream-bar { filter: grayscale(1); }
 }
 
 .stream-label {
