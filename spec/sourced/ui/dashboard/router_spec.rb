@@ -4,6 +4,7 @@ require 'spec_helper'
 require 'rack/test'
 
 require 'sourced/ui/dashboard'
+require_relative '../../../support/spec_light'
 
 RSpec.describe Sourced::UI::Dashboard::App do
   include Rack::Test::Methods
@@ -12,16 +13,18 @@ RSpec.describe Sourced::UI::Dashboard::App do
     Sourced::UI::Dashboard::App
   end
 
-  TestEvent = Sourced::Event.define('test.event') unless defined?(TestEvent)
+  RouterTestEvent = Sourced::Event.define('router_test.event') do
+    attribute :thing_id, String
+  end
 
   class TestProjector < Sourced::Projector::EventSourced
-    partition_by :id
+    partition_by :thing_id
 
     context do
       {}
     end
 
-    evolve TestEvent do |state, _event|
+    evolve RouterTestEvent do |state, _event|
       state
     end
 
@@ -35,10 +38,11 @@ RSpec.describe Sourced::UI::Dashboard::App do
     Sourced.config.config!('store.install_tables') { true }
     Sourced.config.config!('workers.count') { 0 }
     Sourced.register(TestProjector)
+    Sourced.register(SpecLight)
     Sourced.start!
 
     store = Sourced.store
-    events = 3.times.map { TestEvent.new }
+    events = 3.times.map { RouterTestEvent.new(payload: { thing_id: 't1' }) }
     store.append(events)
   end
 
@@ -135,6 +139,51 @@ RSpec.describe Sourced::UI::Dashboard::App do
       get '/topology/'
       expect(last_response.status).to eq(200)
       expect(last_response.content_type).to include('text/html')
+    end
+  end
+
+  describe 'GET /reactors/:group_id' do
+    it 'links each consumer group to its reactor page' do
+      get '/'
+      expect(last_response.body).to include('/reactors/TestProjector"', '/reactors/SpecLight"')
+    end
+
+    it "shows a reactor's consumer group and the messages it handles" do
+      get '/reactors/TestProjector'
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include('TestProjector', 'kind-badge--projector', 'router_test.event', 'thing_id')
+    end
+
+    it "shows a machine's statechart, its states and their commands" do
+      get '/reactors/SpecLight'
+      expect(last_response.status).to eq(200)
+      body = last_response.body
+      expect(body).to include('kind-badge--machine', 'class="statechart"', 'Transitions')
+      expect(body).to include('/reactors/SpecLight/states/on"', '>Dim<')
+      expect(body).not_to match(/is-active" id="sc-/)
+    end
+
+    it 'lights a picked state, with what it accepts and refuses' do
+      get '/reactors/SpecLight/states/on'
+      expect(last_response.status).to eq(200)
+      body = last_response.body
+      expect(body).to match(/is-active" id="sc-on"/)
+      expect(body).to include('Accepts', 'Refuses', '>Install<')
+    end
+
+    it "streams updates to the reactor's consumer group card" do
+      get '/reactors/TestProjector'
+      expect(last_response.body).to include('id="group-TestProjector"', "/reactors/TestProjector/updates')")
+
+      get '/reactors/Nope/updates'
+      expect(last_response.status).to eq(404)
+    end
+
+    it "returns 404 for a reactor or state that doesn't exist" do
+      get '/reactors/Nope'
+      expect(last_response.status).to eq(404)
+      get '/reactors/SpecLight/states/nope'
+      expect(last_response.status).to eq(404)
     end
   end
 

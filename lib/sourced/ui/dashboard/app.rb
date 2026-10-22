@@ -12,6 +12,7 @@ require 'sourced/ui/dashboard/components/message_page'
 require 'sourced/ui/dashboard/components/events_tree'
 require 'sourced/ui/dashboard/components/topology_page'
 require 'sourced/ui/dashboard/components/offsets_page'
+require 'sourced/ui/dashboard/components/reactor_page'
 
 module Sourced
   module UI
@@ -171,7 +172,53 @@ module Sourced
           component(Components::TopologyPage.new(topology: Sourced.topology.map(&:to_h)))
         end
 
+        get '/reactors/:group_id' do |group_id:|
+          render_reactor(group_id)
+        end
+
+        get '/reactors/:group_id/updates' do |group_id:|
+          halt 404, 'Not found' unless store.stats.groups.any? { it[:group_id] == group_id }
+
+          snapshot = nil
+          datastar.stream do |sse|
+            while true
+              stats = store.stats
+              group = stats.groups.find { it[:group_id] == group_id }
+              if group && [group, stats.max_position] != snapshot
+                snapshot = [group, stats.max_position]
+                sse.patch_elements Components::SystemPage::GroupCard.new(group:, tip: stats.max_position, link: false)
+              end
+              sleep 0.1
+            end
+          end
+        end
+
+        get '/reactors/:group_id/states/:state' do |group_id:, state:|
+          render_reactor(group_id, state)
+        end
+
         private
+
+        # A Datastar request (a state picked on a machine's page) gets the
+        # page patched in place, and its URL pushed onto the browser's
+        # history; any other gets the whole page.
+        def render_reactor(group_id, state = nil)
+          page = Components::ReactorPage.build(
+            group_id,
+            reactors: Sourced.router.reactors,
+            stats: store.stats,
+            state:,
+            layout: !datastar.sse?
+          )
+          halt 404, 'Not found' unless page
+          return component(page) unless datastar.sse?
+
+          path = request.path
+          datastar.stream do |sse|
+            sse.patch_elements page
+            sse.execute_script "history.pushState({}, '', #{path.to_json})"
+          end
+        end
 
         def store
           Sourced.store

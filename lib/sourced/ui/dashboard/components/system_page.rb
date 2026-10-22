@@ -57,13 +57,7 @@ module Sourced
           class Consumers < Component
             def initialize(stats:)
               @tip = stats.max_position
-              @groups = stats.groups.map do |g|
-                oldest = g[:oldest_processed]
-                newest = g[:newest_processed]
-                min = oldest.positive? ? ((oldest.to_f / stats.max_position) * 100) : 0
-                max = newest.positive? ? ((1 - (newest.to_f / stats.max_position)) * 100) : 0
-                g.merge(min:, max:)
-              end
+              @groups = stats.groups
             end
 
             def view_template
@@ -80,52 +74,77 @@ module Sourced
                 end
 
                 @groups.each do |group|
-                  status_class = group[:retry_at] ? 'retrying' : group[:status]
-                  div(class: ['stream-container', "consumer-#{status_class}"]) do
-                    div(class: 'stream-label') do
-                      strong do
-                        span { group[:group_id] }
-                        span(class: 'status') do
-                          span { group[:status] }
-                          if group[:retry_at]
-                            span { " (retrying at #{group[:retry_at]})" }
-                          end
-                        end
-                      end
-                      if group[:status] == 'stopped' || group[:status] == 'failed'
-                        command Dashboard::ResumeConsumerGroup do |f|
-                          f.payload_fields(group_id: group[:group_id])
-                          button(type: 'submit', class: 'btn btn-resume') { 'Resume' }
-                        end
-                      else
-                        command Dashboard::StopConsumerGroup do |f|
-                          f.payload_fields(group_id: group[:group_id])
-                          button(type: 'submit', class: 'btn btn-stop') { 'Stop' }
-                        end
-                      end
+                  render GroupCard.new(group:, tip: @tip)
+                end
+              end
+            end
+          end
 
-                      command Dashboard::ResetConsumerGroup do |f|
-                        f.payload_fields(group_id: group[:group_id])
-                        button(type: 'submit', class: 'btn btn-reset') { 'Reset' }
-                      end
-                      small { " (#{group[:partition_count]} partitions)" }
-                      if group[:status] == 'failed' && group[:error_context]&.any?
-                        small(class: 'error-context') do
-                          ctx = group[:error_context]
-                          if ctx[:exception_class]
-                            span { "#{ctx[:exception_class]}: #{ctx[:exception_message]}" }
-                          end
-                        end
+          # A consumer group's status, controls and how far through the log
+          # it is. Its name links to the reactor's page unless +link+ is false.
+          class GroupCard < Component
+            # The card's element id, which updates patch by.
+            def self.dom_id(group_id) = "group-#{group_id.gsub(/[^A-Za-z0-9_-]/, '-')}"
+
+            def initialize(group:, tip:, link: true)
+              @group = group
+              @link = link
+              oldest = group[:oldest_processed]
+              newest = group[:newest_processed]
+              @min = oldest.positive? ? ((oldest.to_f / tip) * 100) : 0
+              @max = newest.positive? ? ((1 - (newest.to_f / tip)) * 100) : 0
+            end
+
+            def view_template
+              group = @group
+              status_class = group[:retry_at] ? 'retrying' : group[:status]
+              div(id: self.class.dom_id(group[:group_id]), class: ['stream-container', "consumer-#{status_class}"]) do
+                div(class: 'stream-label') do
+                  strong do
+                    if @link
+                      a(href: helpers.url("/reactors/#{Rack::Utils.escape_path(group[:group_id])}"), class: 'group-link') { group[:group_id] }
+                    else
+                      span { group[:group_id] }
+                    end
+                    span(class: 'status') do
+                      span { group[:status] }
+                      if group[:retry_at]
+                        span { " (retrying at #{group[:retry_at]})" }
                       end
                     end
-                    div(class: 'stream-bar') do
-                      div(class: 'lower-range', style: "width:#{group[:min]}%") do
-                        div(class: 'tooltip') { group[:oldest_processed] }
-                      end
-                      div(class: 'upper-range', style: "width:#{group[:max]}%") do
-                        div(class: 'tooltip') { group[:newest_processed] }
+                  end
+                  if group[:status] == 'stopped' || group[:status] == 'failed'
+                    command Dashboard::ResumeConsumerGroup do |f|
+                      f.payload_fields(group_id: group[:group_id])
+                      button(type: 'submit', class: 'btn btn-resume') { 'Resume' }
+                    end
+                  else
+                    command Dashboard::StopConsumerGroup do |f|
+                      f.payload_fields(group_id: group[:group_id])
+                      button(type: 'submit', class: 'btn btn-stop') { 'Stop' }
+                    end
+                  end
+
+                  command Dashboard::ResetConsumerGroup do |f|
+                    f.payload_fields(group_id: group[:group_id])
+                    button(type: 'submit', class: 'btn btn-reset') { 'Reset' }
+                  end
+                  small { " (#{group[:partition_count]} partitions)" }
+                  if group[:status] == 'failed' && group[:error_context]&.any?
+                    small(class: 'error-context') do
+                      ctx = group[:error_context]
+                      if ctx[:exception_class]
+                        span { "#{ctx[:exception_class]}: #{ctx[:exception_message]}" }
                       end
                     end
+                  end
+                end
+                div(class: 'stream-bar') do
+                  div(class: 'lower-range', style: "width:#{@min}%") do
+                    div(class: 'tooltip') { group[:oldest_processed] }
+                  end
+                  div(class: 'upper-range', style: "width:#{@max}%") do
+                    div(class: 'tooltip') { group[:newest_processed] }
                   end
                 end
               end
