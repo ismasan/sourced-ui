@@ -299,7 +299,7 @@ module Sourced
                      'text-anchor': state[:after].any? ? 'start' : 'middle') { state[:key] }
               if (timer = state[:after].first)
                 s.text(x: box.right - NODE_PAD, y: box.cy + 4, class: 'statechart__timer', 'text-anchor': 'end') do
-                  "⏱ #{timer[:delay].to_i}s"
+                  "⏱ #{delay_label(timer[:delay])}"
                 end
               end
             end
@@ -471,6 +471,9 @@ module Sourced
 
         # The part's name: its checkpoints are defined in it.
         def compound_name(state) = state[:mounts].first[:src].split('::').last
+
+        # A timer's delay as declared: seconds, or a duration ('15m', 'P30D').
+        def delay_label(delay) = Numeric === delay ? "#{delay.to_i}s" : delay.to_s
 
         def f(n) = n.round(1)
 

@@ -23,18 +23,20 @@ module Sourced
           }.freeze
 
           # @return [ReactorPage, nil] nil for a reactor or state that doesn't exist
-          def self.build(group_id, reactors:, stats:, state: nil, layout: true)
+          # @param topology [#call] returns Sourced.topology: only built for a reactor that isn't a machine
+          def self.build(group_id, reactors:, stats:, topology:, state: nil, layout: true)
             reactor = reactors.find { it.group_id == group_id }
             return unless reactor
 
-            page = new(reactor:, reactors:, stats:, state:, layout:)
+            page = new(reactor:, reactors:, stats:, topology:, state:, layout:)
             page if state.nil? || page.row
           end
 
           attr_reader :row
 
-          def initialize(reactor:, reactors:, stats:, state: nil, layout: true)
+          def initialize(reactor:, reactors:, stats:, topology:, state: nil, layout: true)
             @reactor = reactor
+            @topology = topology
             @reactors = reactors
             @stats = stats
             @group = stats.groups.find { it[:group_id] == reactor.group_id }
@@ -123,7 +125,34 @@ module Sourced
             keys.each { |key| code(class: 'key') { key.to_s } }
           end
 
+          def render_flow
+            flow = EventFlow.build(@topology.call, @reactor.group_id)
+            return if flow.empty?
+
+            href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
+
+            figure(class: 'chart-card') do
+              figcaption(class: 'chart-card__bar') do
+                strong { 'Event model' }
+                span(class: 'muted') { 'What triggers it, what it decides, and what reacts downstream.' }
+                ul(class: 'em-key', aria: { label: 'Key' }) do
+                  li(class: 'em-key__item em-key__item--command') { 'Command' }
+                  li(class: 'em-key__item em-key__item--event') { 'Event' }
+                  li(class: 'em-key__item em-key__item--readmodel') { 'Read model' }
+                  li(class: 'em-key__item em-key__item--automation') { 'Automation' }
+                end
+              end
+              div(class: 'chart-card__canvas chart-card__canvas--plain') do
+                render Sourced::UI::Components::EventModel.new(flow, href:, title: "#{@reactor.group_id} event model")
+              end
+              if flow.truncated?
+                p(class: 'chart-card__note') { 'The flow goes on further downstream than shown.' }
+              end
+            end
+          end
+
           def render_handlers
+            render_flow
             commands, events = Array(@reactor.handled_messages).partition { Module === it && it <= Sourced::Command }
 
             section(class: 'panel') do
@@ -395,7 +424,7 @@ module Sourced
 
           def reactor_link(group_id)
             if @reactors.any? { it.group_id == group_id }
-              a(href: helpers.url("/reactors/#{Rack::Utils.escape_path(group_id)}")) { group_id }
+              a(href: reactor_href(group_id)) { group_id }
             else
               code { group_id }
             end
@@ -430,7 +459,8 @@ module Sourced
 
           # ---- Links ----
 
-          def base_href = helpers.url("/reactors/#{Rack::Utils.escape_path(@reactor.group_id)}")
+          def reactor_href(group_id) = helpers.url("/reactors/#{Rack::Utils.escape_path(group_id)}")
+          def base_href = reactor_href(@reactor.group_id)
           def state_href(row) = "#{base_href}/states/#{MachineChart.dom_id(row.path)}"
 
           # Fetched over Datastar, which patches the page in, instead of loaded.

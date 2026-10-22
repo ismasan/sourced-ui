@@ -207,6 +207,7 @@ module Sourced
             group_id,
             reactors: Sourced.router.reactors,
             stats: store.stats,
+            topology: -> { Sourced.topology },
             state:,
             layout: !datastar.sse?
           )
