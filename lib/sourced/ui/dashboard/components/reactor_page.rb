@@ -309,7 +309,9 @@ module Sourced
                   code { @row.path }
                   span(class: "type-badge type-badge--#{@row.type}") { @row.type }
                 end
-                @row.timers.each { |delay| p(class: 'note') { "⏱ A timer fires #{delay} after entering it." } }
+                @row.timers.each do |timer|
+                  p(class: 'note') { "⏱ #{MachineChart.delay_label(timer.delay)} after entering it, a timer dispatches #{timer.commands.join(', ')}." }
+                end
               end
 
               div(class: 'columns') do
@@ -416,7 +418,7 @@ module Sourced
             href = current ? base_href : state_href(row)
             a(href:, class: "state-link state-link--#{row.type}", aria: { current: current ? 'true' : nil }, data: travel(href)) do
               span(class: 'state-link__name') { row.name }
-              span(class: 'state-link__timer', title: "Timer: #{row.timers.join(', ')}") { '⏱' } if row.timers.any?
+              span(class: 'state-link__timer', title: "Timer: #{row.timers.map(&:label).join('; ')}") { '⏱' } if row.timers.any?
               span(class: "type-badge type-badge--#{row.type}") { row.type } unless row.type == 'atomic'
             end
           end

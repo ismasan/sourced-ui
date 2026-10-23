@@ -25,9 +25,7 @@ class SpecTrip < Sourced::Machine
     Expire = Command(:expire)
 
     started Paying do
-      after('15m') do |_trip, _transition|
-        dispatch Expire
-      end
+      after('15m' => Expire)
 
       command Pay => Paid
       command Expire => Expired

@@ -28,7 +28,8 @@ RSpec.describe Sourced::UI::Components::Statechart do
 
     it 'draws finals, timers, joins and history targets' do
       expect(svg).to match(/statechart__node--final" id="sc-booked">.*statechart__final-ring/)
-      expect(svg).to include('>⏱ 15m<')
+      expect(svg).to include('>⏱ 15m / Expire<')
+      expect(svg).not_to include('statechart__timer')
       expect(svg).to include('>done<', '>on_final<', '>Replan (H*)<')
     end
 
@@ -73,6 +74,27 @@ RSpec.describe Sourced::UI::Components::Statechart do
     end
   end
 
+  # a: after 60s Ping (its own loop), after 2h Reset (b takes it), Go ─▶ b.
+  describe 'timers' do
+    subject(:svg) do
+      state = ->(id, on = {}, after = []) { { id:, key: id, type: 'atomic', after:, always: [], mounts: [], status: nil, on: } }
+      cmd = ->(label, targets) { { kind: 'command', event: "spec.#{label.downcase}", label:, targets:, starts: [] } }
+      after = [{ delay: 60, dispatches: %w[spec.ping] }, { delay: '2h', dispatches: %w[spec.reset] }]
+      render({ machine: 'Spec', initial: 'a', states: {
+               'a' => state.('a', { 'spec.ping' => cmd.('Ping', []), 'spec.go' => cmd.('Go', ['b']) }, after),
+               'b' => state.('b', { 'spec.reset' => cmd.('Reset', ['a']) })
+             } })
+    end
+
+    it 'label the arrows they fire from their state' do
+      expect(svg).to include('>⏱ 60s / Ping<', '>Go<', '>Reset<')
+    end
+
+    it "go on the state when another state takes their commands" do
+      expect(svg).to match(%r{class="statechart__timer"[^>]*>⏱ 2h / Reset</text>})
+    end
+  end
+
   it 'draws a chart with nothing in it' do
     expect(render({ machine: 'Empty', initial: nil, states: {} })).to include('<svg', 'Empty statechart')
   end
@@ -107,7 +129,8 @@ RSpec.describe Sourced::UI::MachineChart do
     ])
     expect(rows['planning.flight.initial'].own.map { it[:label] }).to eq(%w[ChooseFlight])
     expect(rows['planning.flight.initial'].inherited.map { it[:label] }).to eq(%w[Cancel])
-    expect(rows['checkout.paying'].timers).to eq(['15m'])
+    expect(rows['checkout.paying'].timers).to eq([described_class::Timer.new(delay: '15m', commands: %w[Expire])])
+    expect(rows['checkout.paying'].timers.first.label).to eq('15m / Expire')
   end
 
   it "finds the commands a sibling region's states take" do

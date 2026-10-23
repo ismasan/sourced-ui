@@ -22,7 +22,7 @@ module Sourced
           [:command, 'Command, and the state it decides into'],
           [:done, 'done: taken by itself once every region is final'],
           [:data, 'Command that only records data, and stays put'],
-          [:timer, 'Timer: a command dispatched that long after entering']
+          [:timer, 'Timer: a command dispatched that long after entering, on its arrow or on the state']
         ].freeze
 
         def view_template

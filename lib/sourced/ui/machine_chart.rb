@@ -15,19 +15,33 @@ module Sourced
         def name = path.split('.').last
       end
 
+      # A timer: its delay as declared, and the labels of the commands it dispatches.
+      Timer = Data.define(:delay, :commands) do
+        def label = "#{MachineChart.delay_label(delay)} / #{commands.join(', ')}"
+      end
+
+      # A timer's delay as declared: seconds, or a duration ('15m', 'P30D').
+      def delay_label(delay) = Numeric === delay ? "#{delay.to_i}s" : delay.to_s
+
+      # command type => its label, for every command the machine takes.
+      def command_labels(chart) = commands(chart).to_h { [it[:event], it[:label]] }
+
+      # A state's timers, their commands labelled from +labels+ (command_labels).
+      def timers(node, labels) = node[:after].map { |t| Timer.new(delay: t[:delay], commands: t[:dispatches].map { labels.fetch(it) }) }
+
       # As Components::Statechart ids its states (+sc-<dom id>+).
       def dom_id(path) = path.to_s.gsub(/[^A-Za-z0-9_-]/, '-')
 
       # Every state of the chart, depth first, with the commands it inherits.
-      def rows(region, inherited = [], acc = [])
+      def rows(region, inherited = [], acc = [], labels = command_labels(region))
         region[:states].each_value do |node|
           next if node[:type] == 'history'
 
           own = node[:on].values
-          acc << Row.new(path: node[:id], type: node[:type], own:, inherited:, timers: node[:after].map { it[:delay] })
+          acc << Row.new(path: node[:id], type: node[:type], own:, inherited:, timers: timers(node, labels))
           case node[:type]
-          in 'parallel' then regions(node).each { rows(it, inherited + own, acc) }
-          in 'compound' then rows(node, inherited + own, acc)
+          in 'parallel' then regions(node).each { rows(it, inherited + own, acc, labels) }
+          in 'compound' then rows(node, inherited + own, acc, labels)
           else nil
           end
         end

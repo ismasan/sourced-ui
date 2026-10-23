@@ -77,6 +77,7 @@ module Sourced
           @href = href
           @title = title || "#{chart[:machine]} statechart"
           @escalations = escalations_in(chart)
+          @command_labels = MachineChart.command_labels(chart)
           @boxes = {}
           @histories = {}     # a parallel checkpoint's history node id => the checkpoint's id
           @parent_region = {} # node id => the key of the region it's in
@@ -233,8 +234,26 @@ module Sourced
         end
 
         def label_width(state)
-          timer = state[:after].any? ? 52 : 0
+          badge = timer_badge(state)
+          timer = badge ? text_width(badge) + 16 : 0
           [(state[:key].length * CHAR_W) + NODE_PAD * 2 + timer, 72].max
+        end
+
+        # A transition its own state's timer fires says so: `⏱ 15m / Expire`.
+        def timed_label(state, transition)
+          label = transition_label(transition)
+          delays = state[:after].select { it[:dispatches].include?(transition[:event]) }.map { MachineChart.delay_label(it[:delay]) }
+          delays.any? ? "⏱ #{delays.join(', ')} / #{label}" : label
+        end
+
+        # The timers whose commands no arrow from the state carries (another
+        # state takes them), on the state itself: `⏱ 2h / Reopen`.
+        def timer_badge(state)
+          untaken = state[:after].filter_map do |timer|
+            rest = timer[:dispatches].reject { state[:on].key?(it) }
+            MachineChart::Timer.new(delay: timer[:delay], commands: rest.map { @command_labels.fetch(it) }).label if rest.any?
+          end
+          untaken.any? ? "⏱ #{untaken.join(', ')}" : nil
         end
 
         # [label, target id] for each transition the machine takes by itself from
@@ -345,14 +364,10 @@ module Sourced
               if box.kind == :final
                 s.rect(x: box.x + 3, y: box.y + 3, width: box.w - 6, height: box.h - 6, rx: 6, class: 'statechart__final-ring')
               end
-              label_x = state[:after].any? ? box.x + NODE_PAD : box.cx
-              s.text(x: label_x, y: box.cy + 4, class: 'statechart__label',
-                     'text-anchor': state[:after].any? ? 'start' : 'middle') { state[:key] }
-              if (timer = state[:after].first)
-                s.text(x: box.right - NODE_PAD, y: box.cy + 4, class: 'statechart__timer', 'text-anchor': 'end') do
-                  "⏱ #{delay_label(timer[:delay])}"
-                end
-              end
+              badge = timer_badge(state)
+              label_x = badge ? box.x + NODE_PAD : box.cx
+              s.text(x: label_x, y: box.cy + 4, class: 'statechart__label', 'text-anchor': badge ? 'start' : 'middle') { state[:key] }
+              s.text(x: box.right - NODE_PAD, y: box.cy + 4, class: 'statechart__timer', 'text-anchor': 'end') { badge } if badge
             end
           end
         end
@@ -371,7 +386,7 @@ module Sourced
           region[:states].each_value do |state|
             live = state.dig(:status, :active)
             Array(state[:on]&.values).each do |transition|
-              label = transition_label(transition)
+              label = timed_label(state, transition)
               if transition[:targets].empty?
                 edges << Edge.new(from: state[:id], to: state[:id], label:, kind: live ? :data_live : :data,
                                   starts: Array(transition[:starts]))
@@ -614,9 +629,6 @@ module Sourced
 
         # The part's name: its checkpoints are defined in it.
         def compound_name(state) = state[:mounts].first[:src].split('::').last
-
-        # A timer's delay as declared: seconds, or a duration ('15m', 'P30D').
-        def delay_label(delay) = Numeric === delay ? "#{delay.to_i}s" : delay.to_s
 
         def f(n) = n.round(1)
 
