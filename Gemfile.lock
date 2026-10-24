@@ -6,9 +6,8 @@ GIT
       kramdown
       kramdown-parser-gfm
 
-GIT
-  remote: https://github.com/ismasan/sidereal.git
-  revision: a796e8d1ee30cba327f5f864807bd23f73a7a97d
+PATH
+  remote: ../sidereal
   specs:
     sidereal (0.1.0)
       async
@@ -22,17 +21,15 @@ GIT
       sourced-message (>= 0.4.0)
       tsort
 
-GIT
-  remote: https://github.com/ismasan/sourced.git
-  revision: d85b83d7a29f1563e3cafc74771fd9d1551c7e6d
-  branch: main
+PATH
+  remote: ../sourced
   specs:
     sourced (0.0.1)
       async
       plumb (= 0.4.0)
       sequel
       sourced-component (~> 0.1, >= 0.1.1)
-      sourced-message (>= 0.5)
+      sourced-message (>= 0.5.1)
       sqlite3
 
 PATH

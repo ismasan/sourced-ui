@@ -11,3 +11,9 @@ module Sourced
 end
 
 require_relative 'components/message_filter'
+require_relative 'machine_chart'
+require_relative 'components/statechart'
+require_relative 'components/statechart_legend'
+require_relative 'event_flow'
+require_relative 'components/event_model'
+require_relative 'machine_slice'
