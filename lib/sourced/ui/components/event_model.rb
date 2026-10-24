@@ -187,7 +187,7 @@ module Sourced
 
         # The box's full name and type, and with schemas its fields uncut.
         def tooltip(node)
-          text = "#{KIND_LABELS.fetch(node.kind)}: #{node.name}\n#{node.id}\nfrom #{node.group_id}"
+          text = "#{KIND_LABELS.fetch(node.kind)}: #{node.name}\n#{node.id}\nfrom #{node.group_label}"
           text += "\n#{node.tags.join(' ')}" if node.tags.any?
           return text unless @schemas
 
@@ -197,14 +197,14 @@ module Sourced
 
         # Other reactors' steps name their reactor, unless the name says it.
         def caption?(node)
-          !node.own && node.kind != :event && display_name(node) != node.group_id.split('::').last
+          !node.own && node.kind != :event && display_name(node) != node.group_label.split('::').last
         end
 
         # The line at a box's foot: what else it leads to (its tags), or the
         # reactor it belongs to.
         def foot(node)
           if node.tags.any? then node.tags.join(' ')
-          elsif caption?(node) then node.group_id
+          elsif caption?(node) then node.group_label
           end
         end
 

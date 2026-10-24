@@ -65,7 +65,7 @@ module Sourced
 
             def view_template
               div(id: 'consumers', class: 'consumers') do
-                div(class: 'stream-container') do
+                div(class: 'stream-container global-log') do
                   div(class: 'stream-label') do
                     strong { 'Global Message Log' }
                   end
@@ -76,11 +76,92 @@ module Sourced
                   end
                 end
 
-                @groups.each do |group|
-                  render GroupCard.new(group:, tip: @tip, registered: @registered.include?(group[:group_id]))
+                Namespace.partition(@groups).each do |namespace, groups|
+                  if namespace
+                    render Namespace.new(namespace:, groups:, tip: @tip, registered: @registered)
+                  else
+                    groups.each { |group| render group_card(group) }
+                  end
                 end
               end
             end
+
+            private def group_card(group)
+              GroupCard.new(group:, tip: @tip, registered: @registered.include?(group[:group_id]))
+            end
+          end
+
+          # The consumer groups sharing the first segment of their group id
+          # (+cross_post+ in +cross_post.connections.linked_in+), in a box
+          # collapsed by default to a summary: how many groups, and how many
+          # are stopped or failed, which colours the box so that a stopped
+          # group is noticed without opening it.
+          #
+          # The box is a +<details>+ whose +open+ attribute Datastar keeps
+          # across the morphs of +/updates+, so one the operator opened stays
+          # open while its cards update.
+          class Namespace < Component
+            # Groups by namespace, in the order of their first group: a group
+            # whose id has one segment stands alone, under a nil namespace.
+            #
+            # @param groups [Array<Hash>] Store#stats groups
+            # @return [Array<[String, Array<Hash>]>, Array<[nil, Array<Hash>]>]
+            def self.partition(groups)
+              groups
+                .chunk_while { |a, b| namespace_of(a) && namespace_of(a) == namespace_of(b) }
+                .map { |chunk| [namespace_of(chunk.first), chunk] }
+            end
+
+            def self.namespace_of(group)
+              head, rest = group[:group_id].split('.', 2)
+              head if rest
+            end
+
+            def self.dom_id(namespace) = "namespace-#{namespace.gsub(/[^A-Za-z0-9_-]/, '-')}"
+
+            def initialize(namespace:, groups:, tip:, registered:)
+              @namespace = namespace
+              @groups = groups
+              @tip = tip
+              @registered = registered
+            end
+
+            def view_template
+              halted = @groups.count { |g| registered?(g) && %w[stopped failed].include?(g[:status]) }
+              retrying = @groups.count { |g| registered?(g) && g[:retry_at] }
+              state = if halted.positive? then 'halted'
+                      elsif retrying.positive? then 'retrying'
+                      else 'ok'
+                      end
+
+              details(id: self.class.dom_id(@namespace), class: ['namespace', "namespace-#{state}"], data: { preserve_attr: 'open' }) do
+                summary(class: 'namespace-summary') do
+                  strong(class: 'namespace-name') { title }
+                  code(class: 'namespace-id') { @namespace }
+                  span(class: 'namespace-count') { pluralize(@groups.size, 'group') }
+                  span(class: 'namespace-badge namespace-badge--halted') { "#{halted} stopped" } if halted.positive?
+                  span(class: 'namespace-badge namespace-badge--retrying') { "#{retrying} retrying" } if retrying.positive?
+                end
+                div(class: 'namespace-groups') do
+                  @groups.each do |group|
+                    render GroupCard.new(group:, tip: @tip, registered: registered?(group))
+                  end
+                end
+              end
+            end
+
+            private
+
+            def registered?(group) = @registered.include?(group[:group_id])
+
+            # The module the groups' classes share (+CrossPost+), read off
+            # their labels; the namespace id when they share none.
+            def title
+              heads = @groups.map { |g| g[:label].to_s.split('::').first }.uniq
+              heads.size == 1 && heads.first && !heads.first.empty? ? heads.first : @namespace
+            end
+
+            def pluralize(count, word) = "#{count} #{word}#{'s' unless count == 1}"
           end
 
           # A consumer group's status, controls and how far through the log
@@ -112,10 +193,11 @@ module Sourced
               div(id: self.class.dom_id(group[:group_id]), class: ['stream-container', "consumer-#{status_class}"]) do
                 div(class: 'stream-label') do
                   strong do
+                    label = group[:label] || group[:group_id]
                     if @link
-                      a(href: helpers.url("/reactors/#{Rack::Utils.escape_path(group[:group_id])}"), class: 'group-link') { group[:group_id] }
+                      a(href: helpers.url("/reactors/#{Rack::Utils.escape_path(group[:group_id])}"), class: 'group-link', title: group[:group_id]) { label }
                     else
-                      span { group[:group_id] }
+                      span(title: group[:group_id]) { label }
                     end
                     if @registered
                       span(class: 'status') do

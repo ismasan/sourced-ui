@@ -55,7 +55,7 @@ module Sourced
           def view_template
             return render_page unless @layout
 
-            Layout(title: "#{@reactor.group_id} · Sourced") do
+            Layout(title: "#{@reactor.group_label} · Sourced") do
               div(id: 'container') { render_page }
               # States are picked in place, with their URL pushed: going back
               # or forward loads the page the browser lands on.
@@ -88,12 +88,13 @@ module Sourced
               end
 
               div(class: 'reactor__title') do
-                h1 { @reactor.group_id }
+                h1 { @reactor.group_label }
                 span(class: "kind-badge kind-badge--#{@kind}") { @kind }
               end
 
               dl(class: 'facts') do
                 fact('Class') { code { @reactor.name.to_s } }
+                fact('Consumer group') { code { @reactor.group_id } }
                 fact('Partitioned by') { partition_keys }
                 if machine?
                   fact('States') { @rows.count { it.type != 'initial' }.to_s }
@@ -127,7 +128,7 @@ module Sourced
 
           def render_flow
             event_model_card(EventFlow.build(@topology.call, @reactor.group_id),
-                             title: "#{@reactor.group_id} event model",
+                             title: "#{@reactor.group_label} event model",
                              lead: 'What triggers it, what it decides, and what reacts downstream.')
           end
 
@@ -231,7 +232,7 @@ module Sourced
               end
               div(class: 'chart-card__canvas', data: { 'on:click' => pick }) do
                 href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
-                render Sourced::UI::Components::Statechart.new(chart, title: "#{@reactor.group_id} statechart", href:)
+                render Sourced::UI::Components::Statechart.new(chart, title: "#{@reactor.group_label} statechart", href:)
               end
               div(class: 'chart-card__foot', data: { 'signals:copied' => "''" }) do
                 details(class: 'chart-card__legend') do
@@ -348,7 +349,7 @@ module Sourced
 
             event_model_card(
               MachineSlice.build(@reactor, @row.path, @topology.call),
-              title: "#{@reactor.group_id} in #{@row.path}, event model",
+              title: "#{@reactor.group_label} in #{@row.path}, event model",
               lead: "What it takes in #{@row.name}, what that appends, and what reacts downstream."
             )
           end
@@ -467,8 +468,8 @@ module Sourced
           end
 
           def reactor_link(group_id)
-            if @reactors.any? { it.group_id == group_id }
-              a(href: reactor_href(group_id)) { group_id }
+            if (reactor = @reactors.find { it.group_id == group_id })
+              a(href: reactor_href(group_id), title: group_id) { reactor.group_label }
             else
               code { group_id }
             end

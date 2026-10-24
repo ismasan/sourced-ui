@@ -274,9 +274,13 @@ module Sourced
         # starts child machines says which: `LogIn / starts Session`.
         def transition_label(transition)
           label = transition[:kind] == 'event' ? "on #{transition[:label]}" : transition[:label]
-          starts = Array(transition[:starts]).map { |id| id.split('::').last }
+          starts = Array(transition[:starts]).map { machine_name(it) }
           starts.any? ? "#{label} / starts #{starts.join(', ')}" : label
         end
+
+        # A child machine's short name from its group id: the last segment,
+        # camel-cased back (+trips.leg_machine+ => +LegMachine+).
+        def machine_name(group_id) = group_id.split(/::|\./).last.split('_').reject(&:empty?).map { it[0].upcase + it[1..] }.join
 
         def text_width(label) = label.length * EDGE_CHAR_W
 
@@ -524,7 +528,7 @@ module Sourced
         # The label, the machines it starts (`LogIn / starts Session`) each a
         # link to its page where +href+ gives one.
         def label_with_links(s, edge)
-          names = edge.starts.map { it.split('::').last }
+          names = edge.starts.map { machine_name(it) }
           starting = " / starts #{names.join(', ')}"
           at = edge.label.index(starting) || raise(ArgumentError, "#{edge.label.inspect} doesn't say it #{starting.strip}")
           s.plain "#{edge.label[0...at]} / starts "

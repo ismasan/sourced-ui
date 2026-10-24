@@ -430,6 +430,91 @@ h2 {
   .stream-bar { filter: grayscale(1); }
 }
 
+/* Consumer groups sharing a namespace, collapsed to a summary by default.
+   A namespace holding a stopped or failed group is tinted red, and one
+   holding a retrying group amber, so either shows while collapsed. */
+.namespace {
+  margin: 10px 0;
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  border-left: 4px solid var(--slate-300);
+  border-radius: 8px;
+}
+
+.namespace-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  color: var(--slate-700);
+  user-select: none;
+}
+.namespace-summary::-webkit-details-marker { display: none; }
+.namespace-summary::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 2px solid var(--slate-400);
+  border-bottom: 2px solid var(--slate-400);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  margin-right: 0.25rem;
+}
+.namespace[open] > .namespace-summary::before { transform: rotate(45deg); }
+.namespace-summary:hover { background: var(--slate-100); border-radius: 8px; }
+
+.namespace-id {
+  font-size: 12px;
+  color: var(--slate-500);
+}
+
+.namespace-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--slate-500);
+}
+
+.namespace-badge {
+  padding: 0.15rem 0.45rem;
+  font-family: monospace;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.namespace-badge--halted { color: #fff; background: var(--red-700); }
+.namespace-badge--retrying { color: var(--amber-700); background: var(--amber-100); }
+
+.namespace-halted {
+  background: var(--red-50);
+  border-color: var(--red-300);
+  border-left-color: var(--red-700);
+}
+.namespace-retrying {
+  background: var(--amber-50);
+  border-color: var(--amber-300);
+  border-left-color: var(--amber-400);
+}
+
+/* Expanded, a namespace is only a heading over its cards, which sit at the
+   page's full width like any other, so every progress bar lines up. */
+.namespace[open] {
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+.namespace[open] > .namespace-summary {
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--slate-200);
+  border-radius: 0;
+}
+.namespace[open] > .namespace-summary:hover { background: none; }
+.namespace-halted[open] > .namespace-summary { border-bottom-color: var(--red-300); }
+.namespace-retrying[open] > .namespace-summary { border-bottom-color: var(--amber-300); }
+
 .stream-label {
   font-size: 14px;
   margin-bottom: 4px;
@@ -511,6 +596,26 @@ h2 {
   border-radius: 6px;
   border: solid 1px var(--slate-300);
   position: relative;
+}
+
+/* The log as a card the shape of a consumer group's (same padding and
+   border, so its bar lines up with theirs), tinted to stand apart, with a
+   divider between it and the groups. */
+.global-log {
+  background: var(--teal-50);
+  border: 1px solid var(--teal-100);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  .stream-label strong { color: var(--teal-700); }
+}
+.global-log::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(-0.625rem - 1px);
+  border-bottom: 1px solid var(--slate-200);
 }
 
 .global-stream {

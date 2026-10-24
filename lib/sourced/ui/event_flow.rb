@@ -22,7 +22,7 @@ module Sourced
       # +schema+ is the message's payload JSON schema, empty for other nodes.
       # +tags+ say what else it leads to that isn't drawn (see MachineSlice).
       # +transition+: a machine's state event.
-      Node = Data.define(:id, :kind, :name, :group_id, :lane, :column, :row, :own, :schema, :tags, :transition)
+      Node = Data.define(:id, :kind, :name, :group_id, :group_label, :lane, :column, :row, :own, :schema, :tags, :transition)
       Edge = Data.define(:from, :to)
       Lane = Data.define(:id, :kind, :label, :rows)
 
@@ -171,6 +171,7 @@ module Sourced
         @columns.sort_by { |id, column| [column, @rows.fetch(id)] }.map do |id, column|
           node = @by_id.fetch(id)
           Node.new(id:, kind: node[:type].to_sym, name: node[:name], group_id: node[:group_id],
+                   group_label: node[:group_label] || node[:group_id],
                    lane: lane_of(node), column:, row: @rows.fetch(id), own: node[:group_id] == @group_id && !@context.include?(id),
                    schema: node[:schema] || {},
                    tags: node[:tags] || [], transition: node[:transition] == true)
@@ -179,12 +180,12 @@ module Sourced
 
       # The lanes with nodes in them.
       def build_lanes
-        event_groups = @nodes.select { it.kind == :event }.map(&:group_id).uniq
-        event_groups = event_groups.partition { it == @group_id }.flatten
+        event_groups = @nodes.select { it.kind == :event }.to_h { [it.group_id, it.group_label] }
+        event_groups = event_groups.partition { |id, _| id == @group_id }.flatten(1)
         lanes = [
           [AUTOMATIONS, :automation, 'Automations'],
           [INTERACTIONS, :interaction, 'Commands · Read models'],
-          *event_groups.map { ["events:#{it}", :event, it] }
+          *event_groups.map { |id, label| ["events:#{id}", :event, label] }
         ]
         lanes.filter_map do |id, kind, label|
           rows = @nodes.select { it.lane == id }.map(&:row).max
