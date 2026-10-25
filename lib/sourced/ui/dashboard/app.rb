@@ -24,36 +24,23 @@ module Sourced
         [[:all, {"cache-control" => "private, max-age=86400"}]].freeze
       end
 
-      # Consumer-group operations are exposed to the browser as typed
-      # Sidereal messages, dispatched via `POST /commands`.
-      ResumeConsumerGroup = Sidereal::Message.define('sourced.ui.resume_consumer_group') do
-        attribute :group_id, Sidereal::Types::String.present
-      end
-
-      StopConsumerGroup = Sidereal::Message.define('sourced.ui.stop_consumer_group') do
-        attribute :group_id, Sidereal::Types::String.present
-      end
-
-      ResetConsumerGroup = Sidereal::Message.define('sourced.ui.reset_consumer_group') do
-        attribute :group_id, Sidereal::Types::String.present
-      end
-
+      # Consumer-group operations are the operator commands of
+      # Sourced::ConsumerGroupMachine, exposed to the browser via
+      # `POST /commands`. The cards render only those a group's status
+      # accepts; a click on a card a moment stale is refused with a 409.
       class Service < Sidereal::App
         session secret: ENV.fetch('SOURCED_DASHBOARD_SESSION_SECRET') { 'x' * 64 }
 
-        handle ResumeConsumerGroup do |cmd|
-          Sourced.start_consumer_group(cmd.payload.group_id)
-          status 204
+        handle ConsumerGroupMachine::Start do |cmd|
+          refusing_invalid_transitions { Sourced.start_consumer_group(cmd.payload.group_id) }
         end
 
-        handle StopConsumerGroup do |cmd|
-          Sourced.stop_consumer_group(cmd.payload.group_id)
-          status 204
+        handle ConsumerGroupMachine::Stop do |cmd|
+          refusing_invalid_transitions { Sourced.stop_consumer_group(cmd.payload.group_id, cmd.payload.message) }
         end
 
-        handle ResetConsumerGroup do |cmd|
-          Sourced.reset_consumer_group(cmd.payload.group_id)
-          status 204
+        handle ConsumerGroupMachine::Reset do |cmd|
+          refusing_invalid_transitions { Sourced.reset_consumer_group(cmd.payload.group_id) }
         end
 
         get '/' do
@@ -188,6 +175,7 @@ module Sourced
               if group && [group, stats.max_position] != snapshot
                 snapshot = [group, stats.max_position]
                 sse.patch_elements Components::SystemPage::GroupCard.new(group:, tip: stats.max_position, link: false)
+                sse.patch_elements Components::SystemPage::FailureCard.new(group:)
               end
               sleep 0.1
             end
@@ -224,6 +212,15 @@ module Sourced
 
         def store
           Sourced.store
+        end
+
+        # 204 once the group has moved; 409 when its status has moved on
+        # since the card was rendered and no longer accepts the command.
+        def refusing_invalid_transitions
+          yield
+          status 204
+        rescue Sourced::Store::InvalidConsumerGroupTransitionError => e
+          halt 409, e.message
         end
 
         # The group_ids of the reactors registered now. The store keeps the

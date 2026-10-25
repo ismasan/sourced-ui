@@ -107,6 +107,7 @@ module Sourced
               if @group
                 div(class: 'consumers reactor__group') do
                   render SystemPage::GroupCard.new(group: @group, tip: @stats.max_position, link: false)
+                  render SystemPage::FailureCard.new(group: @group)
                 end
               end
             end

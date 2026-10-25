@@ -30,6 +30,7 @@
   /* Amber accent */
   --amber-50: #fffbeb;
   --amber-100: #fef3c7;
+  --amber-200: #fde68a;
   --amber-300: #fcd34d;
   --amber-400: #fbbf24;
   --amber-700: #b45309;
@@ -371,28 +372,66 @@ h2 {
   }
 }
 
+/* Retrying: the group carries on, waiting out a failure. Its badge pulses
+   softly so the wait reads as in progress rather than halted. */
 .consumer-retrying {
+  background: var(--amber-50);
+  border-color: var(--amber-300);
   .status {
     color: var(--amber-700);
     background: var(--amber-100);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber-400) 60%, transparent);
+  }
+  .error-context {
+    display: block;
+    color: var(--amber-700);
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 12px;
+    margin-top: 0.25rem;
   }
 }
 
+@keyframes retryingPulse {
+  0%   { background: var(--amber-100); box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber-400) 60%, transparent); }
+  50%  { background: var(--amber-200); box-shadow: 0 0 0 4px transparent; }
+  100% { background: var(--amber-100); box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .consumer-retrying .status,
+  .namespace-badge--retrying {
+    animation: retryingPulse 2s ease-in-out infinite;
+  }
+}
+
+/* Stopped: an operator paused the group on purpose. Calm and neutral, with
+   its progress bar desaturated, so it never reads as a failure. */
 .consumer-stopped {
-  background: var(--red-50);
-  border-color: var(--red-300);
+  background: var(--slate-100);
+  border-color: var(--slate-300);
+  box-shadow: inset 4px 0 0 var(--slate-500);
   .stream-bar {
-    border: solid 1px var(--red-300);
+    filter: saturate(0.25);
   }
   .status {
-    color: var(--red-700);
-    background: var(--red-100);
+    color: var(--slate-700);
+    background: var(--slate-200);
+  }
+  .status::before { content: '❚❚ '; font-size: 9px; }
+  .error-context {
+    display: block;
+    color: var(--slate-600);
+    font-style: italic;
+    font-size: 12px;
+    margin-top: 0.25rem;
   }
 }
 
+/* Failed: the group gave up on an error and needs an operator. */
 .consumer-failed {
   background: var(--red-100);
   border-color: var(--red-400);
+  box-shadow: inset 4px 0 0 var(--red-700);
   .stream-bar {
     border: solid 1px var(--red-400);
     background:
@@ -418,6 +457,64 @@ h2 {
   }
 }
 
+/* A failed group's stored exception and backtrace, in a card after its
+   group's card on the reactor page; collapsed until the operator opens it. */
+.failure-details {
+  margin: 10px 0;
+  background: #fff;
+  border: 1px solid var(--red-300);
+  border-radius: 8px;
+}
+.failure-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--red-700);
+  small { color: var(--slate-500); font-weight: 400; }
+}
+.failure-summary::-webkit-details-marker { display: none; }
+.failure-summary::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  align-self: center;
+}
+.failure-details[open] > .failure-summary::before { transform: rotate(45deg); }
+.failure-details[open] > .failure-summary { border-bottom: 1px solid var(--red-100); }
+.failure-body {
+  padding: 0.75rem;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+.failure-exception {
+  margin: 0 0 0.6rem;
+  color: var(--red-700);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.failure-backtrace {
+  margin: 0;
+  padding: 0.5rem 0 0.5rem 3rem;
+  max-height: 24rem;
+  overflow: auto;
+  background: var(--slate-50);
+  border-radius: 4px;
+  color: var(--slate-800);
+  line-height: 1.6;
+  li { white-space: pre; }
+  li::marker { color: var(--slate-400); }
+  li.is-gem { color: var(--slate-400); }
+}
+
 /* A group no registered reactor has: stored offsets, nothing to act on. */
 .consumer-unregistered {
   border-style: dashed;
@@ -431,8 +528,9 @@ h2 {
 }
 
 /* Consumer groups sharing a namespace, collapsed to a summary by default.
-   A namespace holding a stopped or failed group is tinted red, and one
-   holding a retrying group amber, so either shows while collapsed. */
+   A namespace holding a failed group is tinted red, one holding a stopped
+   group slate, and one holding a retrying group amber, so each shows while
+   collapsed. */
 .namespace {
   margin: 10px 0;
   background: var(--slate-50);
@@ -485,13 +583,19 @@ h2 {
   font-weight: 500;
   letter-spacing: 0.02em;
 }
-.namespace-badge--halted { color: #fff; background: var(--red-700); }
+.namespace-badge--failed { color: #fff; background: var(--red-700); }
+.namespace-badge--stopped { color: var(--slate-700); background: var(--slate-200); }
 .namespace-badge--retrying { color: var(--amber-700); background: var(--amber-100); }
 
-.namespace-halted {
+.namespace-failed {
   background: var(--red-50);
   border-color: var(--red-300);
   border-left-color: var(--red-700);
+}
+.namespace-stopped {
+  background: var(--slate-100);
+  border-color: var(--slate-300);
+  border-left-color: var(--slate-500);
 }
 .namespace-retrying {
   background: var(--amber-50);
@@ -512,7 +616,7 @@ h2 {
   border-radius: 0;
 }
 .namespace[open] > .namespace-summary:hover { background: none; }
-.namespace-halted[open] > .namespace-summary { border-bottom-color: var(--red-300); }
+.namespace-failed[open] > .namespace-summary { border-bottom-color: var(--red-300); }
 .namespace-retrying[open] > .namespace-summary { border-bottom-color: var(--amber-300); }
 
 .stream-label {
@@ -520,8 +624,15 @@ h2 {
   margin-bottom: 4px;
   color: var(--slate-700);
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+
+  /* Why a group halted or is retrying, on a line of its own under the name */
+  .error-context {
+    order: 3;
+    flex-basis: 100%;
+  }
 
   form {
     display: inline;
@@ -546,20 +657,34 @@ h2 {
   background: #f9fafb;
   color: #374151;
   line-height: 1.4;
+  white-space: nowrap;
   transition: background-color 0.15s, border-color 0.15s;
 }
 .btn:hover {
   border-color: #9ca3af;
 }
+.btn:has(.btn-icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.btn-icon {
+  width: 0.75em;
+  height: 0.75em;
+  fill: currentColor;
+  flex-shrink: 0;
+}
 
+/* Stop pauses a group: slate, like the stopped state it leads to. Red is
+   for failure. */
 .btn-stop {
-  color: #b91c1c;
-  border-color: #fca5a5;
-  background: #fef2f2;
+  color: var(--slate-700);
+  border-color: var(--slate-300);
+  background: var(--slate-50);
 }
 .btn-stop:hover {
-  background: #fee2e2;
-  border-color: #f87171;
+  background: var(--slate-200);
+  border-color: var(--slate-400);
 }
 
 .btn-resume {
@@ -945,8 +1070,8 @@ table.offsets-table tr:hover {
   background: var(--teal-100);
 }
 .status-badge.status-stopped {
-  color: var(--red-700);
-  background: var(--red-100);
+  color: var(--slate-700);
+  background: var(--slate-200);
 }
 .status-badge.status-failed {
   color: #fff;
