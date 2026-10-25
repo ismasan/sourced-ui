@@ -41,7 +41,7 @@ module Sourced
           @schemas = schemas
           @box_w = schemas ? SCHEMA_BOX_W : BOX_W
           @col_w = @box_w + GAP_X
-          @nodes = flow.nodes.to_h { [it.id, it] }
+          @nodes = flow.nodes.to_h { [it.key, it] }
           @short = short_paths(flow.nodes)
           # Each row of a lane as tall as its tallest box.
           @row_h = flow.lanes.to_h do |lane|
@@ -232,17 +232,8 @@ module Sourced
           tx, ty = position(to)
 
           # Arrows meet boxes level with their heads, however tall the boxes.
-          path = if to.column > from.column
-                   forward(fx + @box_w, fy + BOX_H / 2.0, tx, ty + BOX_H / 2.0)
-                 else
-                   # Back in time (a cycle): under both boxes.
-                   x1 = fx + @box_w / 2.0
-                   x2 = tx + @box_w / 2.0
-                   y1 = fy + box_h(from)
-                   y2 = ty + box_h(to)
-                   low = [y1, y2].max + LANE_PAD - 2
-                   "M #{x1} #{y1} C #{x1} #{low}, #{x2} #{low}, #{x2} #{y2}"
-                 end
+          # Always forward: a node reached again is drawn again (see EventFlow).
+          path = forward(fx + @box_w, fy + BOX_H / 2.0, tx, ty + BOX_H / 2.0)
           s.path(d: path, class: 'event-model__edge', 'marker-end': "url(##{arrow_id})")
         end
 

@@ -13,8 +13,13 @@ module Sourced
     # and from each of its own commands and automations. It's then laid out as
     # a timeline, one node per column: each after the nodes leading to it, so
     # a read model comes after every event it reads. Events that come straight
-    # from the same nodes (alternatives a command may append) share a column,
+    # from the same node (alternatives a command may append) share a column,
     # stacked in their lane's rows.
+    #
+    # A node reached from more than one node is drawn once for each: after the
+    # last of them, where it goes on downstream, and as a copy straight after
+    # each of the others, leading nowhere. No arrow runs back, or across the
+    # timeline to a node far ahead.
     #
     # Lanes, top to bottom: automations, commands and read models, then the
     # events of each reactor that appends them, the reactor's own first.
@@ -22,8 +27,10 @@ module Sourced
       # +schema+ is the message's payload JSON schema, empty for other nodes.
       # +tags+ say what else it leads to that isn't drawn (see MachineSlice).
       # +transition+: a machine's state event.
-      Node = Data.define(:id, :kind, :name, :group_id, :group_label, :lane, :column, :row, :own, :schema, :tags, :transition)
-      Edge = Data.define(:from, :to)
+      # +key+ tells copies of a node apart: the node's id, or for a copy, the
+      # id and what leads to it.
+      Node = Data.define(:key, :id, :kind, :name, :group_id, :group_label, :lane, :column, :row, :own, :schema, :tags, :transition)
+      Edge = Data.define(:from, :to) # Node keys
       Lane = Data.define(:id, :kind, :label, :rows)
 
       AUTOMATIONS = 'automations'
@@ -62,14 +69,12 @@ module Sourced
         @context = Set.new # what leads into the flow from outside it, shown but not followed
         own = seeds ? topology.select { seeds.include?(it[:id]) } : topology.select { it[:group_id] == group_id && it[:type] != 'event' }
         collect(own, entry)
-        @columns = {}
-        @rows = {}
-        @sharing = {}               # [lane, the flow's nodes leading to an event] => its column
-        @used = Hash.new(0)         # [lane, column] => rows taken
+        @rank = {} # id => its place in the timeline
         @order.each { place(it, []) }
+        lay_out
         @nodes = build_nodes
         @lanes = build_lanes
-        @edges = build_edges
+        @edges = @parents.map { |key, parent| Edge.new(from: parent, to: key) }
       end
 
       # Whether the flow goes on past what's shown.
@@ -140,23 +145,64 @@ module Sourced
         end
       end
 
-      # The next column, after the flow's nodes leading to +id+. +path+ breaks
-      # cycles: a node on it is left to be placed where the walk reached it.
+      # The order of the flow's nodes, each after the nodes leading to it.
+      # +path+ breaks cycles: a node on it is left to be placed where the walk
+      # reached it.
       def place(id, path)
-        return if @columns.key?(id) || path.include?(id)
+        return if @rank.key?(id) || path.include?(id)
 
-        from = upstream(id).select { @order.include?(it) }
-        from.each { place(it, path + [id]) }
-        return if @columns.key?(id)
+        upstream(id).select { @order.include?(it) }.each { place(it, path + [id]) }
+        @rank[id] ||= @rank.size
+      end
 
-        node = @by_id.fetch(id)
-        lane = lane_of(node)
-        column = @sharing[[lane, from.sort]] if node[:type] == 'event' && from.any?
-        column ||= @columns.empty? ? 0 : @columns.values.max + 1
-        @sharing[[lane, from.sort]] ||= column if node[:type] == 'event' && from.any?
-        @columns[id] = column
-        @rows[id] = @used[[lane, column]]
-        @used[[lane, column]] += 1
+      # Each node once for each node leading to it: after the last of them
+      # (in the order +place+ found), where it goes on downstream, and copied
+      # straight after each of the others. Then, in the order the walk reached
+      # them, each in the next column after the one leading to it.
+      def lay_out
+        @parents = {}  # key => the key of what leads to it
+        @ids = {}      # key => the node's id
+        @order.each do |id|
+          @ids[id] = id
+          from = upstream(id).select { @rank.key?(it) }
+          last = from.select { @rank[it] < @rank[id] }.max_by { @rank[it] }
+          @parents[id] = last if last
+          (from - [last]).each do |parent|
+            key = "#{id}<-#{parent}"
+            @ids[key] = id
+            @parents[key] = parent
+          end
+        end
+
+        @instances = {}    # key => [column, row]
+        sharing = {}       # [lane, what leads to an event] => its column
+        used = Hash.new(0) # [lane, column] => rows taken
+        next_column = 0
+        lay = lambda do |key|
+          next if @instances.key?(key)
+
+          parent = @parents[key]
+          lay.(parent) if parent
+          next if @instances.key?(key) # laid straight after its parent
+          node = @by_id.fetch(@ids.fetch(key))
+          lane = lane_of(node)
+          shared = [lane, parent] if node[:type] == 'event' && parent
+          column = sharing[shared] if shared
+          unless column
+            column = next_column
+            next_column += 1
+          end
+          sharing[shared] ||= column if shared
+          @instances[key] = [column, used[[lane, column]]]
+          used[[lane, column]] += 1
+          # Straight after it, the copies it leads to, and its events with
+          # them, stacked as it appends them.
+          downstream(key).each do |id|
+            lay.("#{id}<-#{key}") if @parents.key?("#{id}<-#{key}")
+            lay.(id) if @parents[id] == key && @by_id.dig(id, :type) == 'event'
+          end if @ids[key] == key
+        end
+        @order.each(&lay)
       end
 
       def lane_of(node)
@@ -168,11 +214,12 @@ module Sourced
       end
 
       def build_nodes
-        @columns.sort_by { |id, column| [column, @rows.fetch(id)] }.map do |id, column|
+        @instances.sort_by { |_, (column, row)| [column, row] }.map do |key, (column, row)|
+          id = @ids.fetch(key)
           node = @by_id.fetch(id)
-          Node.new(id:, kind: node[:type].to_sym, name: node[:name], group_id: node[:group_id],
+          Node.new(key:, id:, kind: node[:type].to_sym, name: node[:name], group_id: node[:group_id],
                    group_label: node[:group_label] || node[:group_id],
-                   lane: lane_of(node), column:, row: @rows.fetch(id), own: node[:group_id] == @group_id && !@context.include?(id),
+                   lane: lane_of(node), column:, row:, own: node[:group_id] == @group_id && !@context.include?(id),
                    schema: node[:schema] || {},
                    tags: node[:tags] || [], transition: node[:transition] == true)
         end
@@ -190,12 +237,6 @@ module Sourced
         lanes.filter_map do |id, kind, label|
           rows = @nodes.select { it.lane == id }.map(&:row).max
           Lane.new(id:, kind:, label:, rows: rows + 1) if rows
-        end
-      end
-
-      def build_edges
-        @columns.keys.flat_map do |id|
-          downstream(id).select { @columns.key?(it) }.map { Edge.new(from: id, to: it) }
         end
       end
     end

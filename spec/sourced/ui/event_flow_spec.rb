@@ -41,11 +41,11 @@ RSpec.describe Sourced::UI::EventFlow do
     flow = described_class.build(topology, 'Reviews')
 
     expect(flow.nodes.map(&:id)).to eq(%w[
-      pay confirmed confirmed-Reviews-aut request requested submit submitted
+      pay confirmed confirmed-Reviews-aut request requested summaries-rm submit submitted
       summaries-rm submitted-Summaries-aut flag flagged
     ])
-    expect(flow.nodes.map(&:column)).to eq((0..10).to_a)
-    expect(flow.nodes.reject(&:own).map(&:id)).to eq(%w[pay confirmed summaries-rm submitted-Summaries-aut])
+    expect(flow.nodes.map(&:column)).to eq((0..11).to_a)
+    expect(flow.nodes.reject(&:own).map(&:id)).to eq(%w[pay confirmed summaries-rm summaries-rm submitted-Summaries-aut])
     expect(flow.lanes.map(&:id)).to eq(%w[automations interactions events:Reviews events:Booking])
     expect(flow.edges.map { [it.from, it.to] }).to include(%w[submitted summaries-rm], %w[submitted-Summaries-aut flag])
     expect(flow).not_to be_truncated
@@ -60,7 +60,39 @@ RSpec.describe Sourced::UI::EventFlow do
   it 'starts a read model at the commands appending the events it reads' do
     flow = described_class.build(topology, 'Summaries')
 
-    expect(flow.nodes.first(4).map(&:id)).to eq(%w[request requested submit submitted])
+    expect(flow.nodes.first(5).map(&:id)).to eq(%w[request requested summaries-rm submit submitted])
+  end
+
+  it 'draws a node reached from several once after each, going on downstream only from the last' do
+    flow = described_class.build([
+      cmd('c1', 'Booking', ['e1']), cmd('c2', 'Booking', ['e2']), evt('e1', 'Booking'), evt('e2', 'Booking'),
+      rm('rm1', 'Booking', %w[e1 e2], ['aut1']), aut('aut1', 'Booking', ['rm1'], [])
+    ], 'Booking')
+
+    expect(flow.nodes.map { [it.id, it.column] }).to eq([['c1', 0], ['e1', 1], ['rm1', 2], ['c2', 3], ['e2', 4], ['rm1', 5], ['aut1', 6]])
+    copy, rm1 = flow.nodes.select { it.id == 'rm1' }
+    expect(copy.key).not_to eq(rm1.key)
+    expect(flow.edges.map { [it.from, it.to] }).to contain_exactly(
+      %w[c1 e1], %w[c2 e2], ['e1', copy.key], ['e2', rm1.key], [rm1.key, 'aut1']
+    )
+  end
+
+  it 'draws an event appended by several commands after each, stacked with their other events' do
+    flow = described_class.build([
+      cmd('c1', 'Booking', %w[e1 shared]), cmd('c2', 'Booking', ['shared']),
+      evt('e1', 'Booking'), evt('shared', 'Booking')
+    ], 'Booking')
+
+    expect(flow.nodes.map { [it.id, it.column, it.row] }).to eq([['c1', 0, 0], ['e1', 1, 0], ['shared', 1, 1], ['c2', 2, 0], ['shared', 3, 0]])
+  end
+
+  it 'draws a cycle forward, the node it comes back to drawn again' do
+    flow = described_class.build([
+      cmd('c1', 'Booking', ['e1']), evt('e1', 'Booking'), aut('aut1', 'Booking', ['e1'], ['c1'])
+    ], 'Booking')
+
+    expect(flow.nodes.map(&:id)).to eq(%w[aut1 c1 e1 aut1])
+    expect(flow.edges.map { |e| [e.from, e.to].map { k = it; flow.nodes.find { it.key == k }.column } }).to all(satisfy { |from, to| to > from })
   end
 
   it 'stacks the events a node may append in one column' do
