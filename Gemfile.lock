@@ -6,8 +6,9 @@ GIT
       kramdown
       kramdown-parser-gfm
 
-PATH
-  remote: ../sidereal
+GIT
+  remote: https://github.com/ismasan/sidereal.git
+  revision: d0c3d4e4905c783cd05c66465f8a0a509f50f07b
   specs:
     sidereal (0.1.0)
       async
@@ -21,15 +22,16 @@ PATH
       sourced-message (>= 0.4.0)
       tsort
 
-PATH
-  remote: ../sourced
+GIT
+  remote: https://github.com/ismasan/sourced.git
+  revision: a5f0a771141c7d986eefb304f5f25fb0455c8850
   specs:
     sourced (0.0.1)
       async
       plumb (= 0.4.0)
       sequel
       sourced-component (~> 0.1, >= 0.1.1)
-      sourced-message (>= 0.5.1)
+      sourced-message (>= 0.5.2)
       sqlite3
 
 PATH
@@ -163,7 +165,7 @@ GEM
       plumb (~> 0.4)
       sourced-message
       tsort (~> 0.2)
-    sourced-message (0.5.1)
+    sourced-message (0.5.2)
       fugit
       plumb (>= 0.4)
     sqlite3 (2.10.1-aarch64-linux-gnu)
@@ -267,7 +269,7 @@ CHECKSUMS
   sidereal (0.1.0)
   sourced (0.0.1)
   sourced-component (0.1.1) sha256=61a0823a2f89e39dc08cdfaf1a6f565abed0a4edaad67241811da16004cdaa61
-  sourced-message (0.5.1) sha256=12122029f12d23ad71f9556b2d2d37b065d3f25259e29de1a3cadda69b067892
+  sourced-message (0.5.2) sha256=39189809179ffbc9356b384d1eeeeea731be00b3c665753cfa6017c97cd1aa0f
   sourced-ui (0.1.0)
   sqlite3 (2.10.1-aarch64-linux-gnu) sha256=48390cc2b809acd1280f5c9daaf3c2013833adb8a5ece9b0634f708651080ccd
   sqlite3 (2.10.1-aarch64-linux-musl) sha256=db1bcddf98e4eeea80ca896f56aa3f9468364fa1ee8e042ddc6b628b5092fabb

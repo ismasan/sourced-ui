@@ -58,6 +58,27 @@ RSpec.describe Sourced::UI::Dashboard::App do
     Sourced.reset!
   end
 
+  # Move a group as a worker does, through Store#updating_consumer_group
+  # and the GroupUpdater it yields.
+  def fail_group(reactor, error)
+    Sourced.store.updating_consumer_group(reactor.group_id) { it.fail(exception: error) }
+  end
+
+  def retry_group(reactor, error, at: Time.now + 60)
+    Sourced.store.updating_consumer_group(reactor.group_id) { it.retry(at, exception: error) }
+  end
+
+  def error(klass, message, backtrace = [])
+    klass.new(message).tap { it.set_backtrace(backtrace) }
+  end
+
+  # Back to active, clearing its error context, from wherever an example left it.
+  def activate_group(reactor)
+    Sourced.start_consumer_group(reactor)
+  rescue Sourced::Store::InvalidConsumerGroupTransitionError
+    nil # active already
+  end
+
   describe 'GET /' do
     it 'returns 200 with text/html' do
       get '/'
@@ -99,28 +120,23 @@ RSpec.describe Sourced::UI::Dashboard::App do
   end
 
   describe 'POST /commands' do
-    it 'handles sourced.ui.resume_consumer_group with 204' do
-      post '/commands', command: {
-        type: 'sourced.ui.resume_consumer_group',
-        payload: { group_id: TestProjector.group_id }
-      }
+    def post_command(type, group_id = TestProjector.group_id)
+      post '/commands', command: { type: "sourced.consumer_groups.#{type}", payload: { group_id: } }
+    end
+
+    it 'stops, resets and starts a consumer group with 204' do
+      post_command 'stop'
+      expect(last_response.status).to eq(204)
+      post_command 'reset'
+      expect(last_response.status).to eq(204)
+      post_command 'start'
       expect(last_response.status).to eq(204)
     end
 
-    it 'handles sourced.ui.stop_consumer_group with 204' do
-      post '/commands', command: {
-        type: 'sourced.ui.stop_consumer_group',
-        payload: { group_id: TestProjector.group_id }
-      }
-      expect(last_response.status).to eq(204)
-    end
-
-    it 'handles sourced.ui.reset_consumer_group with 204' do
-      post '/commands', command: {
-        type: 'sourced.ui.reset_consumer_group',
-        payload: { group_id: TestProjector.group_id }
-      }
-      expect(last_response.status).to eq(204)
+    it "refuses with 409 a command the group's status doesn't accept" do
+      post_command 'start'
+      expect(last_response.status).to eq(409)
+      expect(last_response.body).to include("it's active")
     end
 
     it 'returns 404 for unknown command types' do
@@ -163,6 +179,64 @@ RSpec.describe Sourced::UI::Dashboard::App do
       expect(card).to include('consumer-unregistered', '>not registered<', '>Legacy::Payroll<')
       expect(card).not_to include('<form', '<a ')
       expect(last_response.body).to include('href="http://example.org/reactors/test_projector"')
+    end
+
+    describe 'consumer group cards' do
+      after { activate_group(TestProjector) }
+
+      def card
+        get '/'
+        last_response.body[/<div id="group-test_projector".*?<div class="stream-bar">/m]
+      end
+
+      it 'offers an active group Stop only' do
+        expect(card).to include('consumer-active', '>active<', '>Stop<')
+        expect(card).not_to include('>Resume<', '>Reset<')
+      end
+
+      it 'offers a stopped group Resume and Reset, with its stop message' do
+        Sourced.stop_consumer_group(TestProjector, 'deploying')
+        expect(card).to include('consumer-stopped', '>stopped<', '>Resume<', '>Reset<', 'deploying')
+        expect(card).not_to include('>Stop<')
+      end
+
+      it 'offers a failed group Resume, Stop and Reset, with its error' do
+        fail_group(TestProjector, error(RuntimeError, 'boom'))
+        expect(card).to include('consumer-failed', '>failed<', '>Resume<', '>Stop<', '>Reset<', 'RuntimeError: boom')
+      end
+
+      it 'offers a retrying group Retry now and Stop, with its error and next attempt' do
+        2.times { retry_group(TestProjector, error(IOError, 'flaky')) }
+        expect(card).to include('consumer-retrying', '>retrying<', '>Retry now<', '>Stop<', 'IOError: flaky', 'retry #2')
+        expect(card).not_to include('>Reset<', '>Resume<')
+      end
+    end
+
+    describe 'failure card' do
+      after { activate_group(TestProjector) }
+
+      it "shows a failed group's exception and backtrace, collapsed, on its reactor page only" do
+        fail_group(TestProjector, error(RuntimeError, 'booom!', ['app/listing.rb:12:in `evolve`', '/gems/sourced/lib/sourced/router.rb:40:in `handle`']))
+
+        get '/reactors/test_projector'
+        body = last_response.body
+        expect(body).to include('<details id="group-test_projector-failure" class="failure-details" data-preserve-attr="open">')
+        # In a card of its own, after the group's: its progress bar, then the card, close first.
+        expect(body).to match(%r{<div class="upper-range"[^>]*><div class="tooltip">[^<]*</div></div></div></div><details id="group-test_projector-failure"})
+        expect(body).to include('>2 frames<', '<strong>RuntimeError</strong>: booom!', 'app/listing.rb:12:in `evolve`')
+        expect(body).to match(%r{<li class="is-gem">/gems/sourced/lib/sourced/router.rb})
+
+        get '/'
+        expect(last_response.body).not_to include('failure-details')
+      end
+
+      it "renders only a hidden placeholder for a group that isn't failed, even with a stored exception" do
+        retry_group(TestProjector, error(IOError, 'flaky'))
+
+        get '/reactors/test_projector'
+        expect(last_response.body).to include('<div id="group-test_projector-failure" hidden>')
+        expect(last_response.body).not_to include('failure-details')
+      end
     end
 
     it "shows a reactor's consumer group and the messages it handles" do
@@ -235,9 +309,20 @@ RSpec.describe Sourced::UI::Dashboard::App do
       Sourced.stop_consumer_group(RouterTestShop::Carts)
       box = namespace_box
 
-      expect(box).to include('namespace-halted', '>1 stopped<')
+      expect(box).to include('namespace-stopped', 'namespace-badge--stopped', '>1 stopped<')
     ensure
       Sourced.start_consumer_group(RouterTestShop::Carts)
+    end
+
+    it 'counts failed groups apart from stopped ones, and tints the box as failed' do
+      Sourced.stop_consumer_group(RouterTestShop::Carts)
+      fail_group(RouterTestShop::Orders, error(RuntimeError, 'boom'))
+      box = namespace_box
+
+      expect(box).to include('namespace namespace-failed', '>1 failed<', '>1 stopped<')
+    ensure
+      activate_group(RouterTestShop::Orders)
+      activate_group(RouterTestShop::Carts)
     end
   end
 

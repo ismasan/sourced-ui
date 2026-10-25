@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'nokogiri'
 require 'sourced/ui/components'
 require_relative '../../../support/spec_trip'
 require_relative '../../../support/machine_helpers'
@@ -49,11 +50,11 @@ RSpec.describe Sourced::UI::Components::Statechart do
     expect(svg).to match(/statechart__region is-done" id="sc-region-planning.flight"/)
     expect(svg).not_to match(/is-active" id="sc-checkout/)
 
-    live = svg.scan(/is-live"><text[^>]*>([^<]+)</).flatten
+    live = svg.scan(/is-live"[^>]*><text[^>]*>([^<]+)</).flatten
     expect(live).to contain_exactly('Cancel', 'ChooseHotel')
     # Their lines too, with the live arrowhead.
-    expect(svg.scan(/is-live"><path[^>]*marker-end="url\(#sc-arrow-live\)"/).size).to eq(2)
-    expect(svg).not_to match(/is-live"><path[^>]*marker-end="url\(#sc-arrow\)"/)
+    expect(svg.scan(/is-live"[^>]*><path[^>]*marker-end="url\(#sc-arrow-live\)"/).size).to eq(2)
+    expect(svg).not_to match(/is-live"[^>]*><path[^>]*marker-end="url\(#sc-arrow\)"/)
   end
 
   describe 'a transition that starts child machines' do
@@ -108,12 +109,20 @@ RSpec.describe Sourced::UI::Components::Statechart do
       'x' => state.('p.r.x', 'atomic', { 'reset' => cmd.('Reset', 'p') })
     } }
     chart = { machine: 'Spec', initial: 'p', states: { 'p' => state.('p', 'parallel').merge(states: { 'r' => region }) } }
-    statechart = described_class.new(chart)
+    svg = Nokogiri::XML(render(chart))
+    svg.remove_namespaces!
 
-    reset = statechart.instance_variable_get(:@placed).fetch([:region, 'p.r']).find { it.edge.label == 'Reset' }
-    expect(reset.to).to eq('p.r.initial')
-    expect(statechart.instance_variable_get(:@direct)).to be_empty
-    expect(statechart.call).to include('>Reset<')
+    # Reset reaches the region's initial position, not p itself, so no line
+    # goes to p's border.
+    reset = svg.xpath('//g[@data-from="p.r.x"]')
+    expect(reset.map { it['data-to'] }.uniq).to eq(['p.r.initial'])
+    expect(reset.map { it.text.strip }).to include('Reset')
+    expect(svg.xpath('//g[@data-to="p"]')).to be_empty
+
+    # And its line ends on that initial dot.
+    dot = svg.at_xpath('//g[@id="sc-p-r-initial"]/circle')
+    *, x, y = reset.at_xpath('path')['d'].scan(/-?[\d.]+/).map(&:to_f)
+    expect(Math.hypot(x - dot['cx'].to_f, y - dot['cy'].to_f)).to be <= dot['r'].to_f + 0.5
   end
 end
 
@@ -145,6 +154,6 @@ RSpec.describe Sourced::UI::MachineChart do
     expect(svg).to match(/is-active" id="sc-checkout"/)
     expect(svg).to match(/is-active" id="sc-checkout-paying"/)
     expect(svg).not_to match(/is-active" id="sc-planning"/)
-    expect(svg).to match(/is-live"><text[^>]*>Pay</)
+    expect(svg).to match(/is-live"[^>]*><text[^>]*>Pay</)
   end
 end

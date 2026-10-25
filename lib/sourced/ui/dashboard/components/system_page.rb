@@ -94,8 +94,9 @@ module Sourced
           # The consumer groups sharing the first segment of their group id
           # (+cross_post+ in +cross_post.connections.linked_in+), in a box
           # collapsed by default to a summary: how many groups, and how many
-          # are stopped or failed, which colours the box so that a stopped
-          # group is noticed without opening it.
+          # are failed, stopped or retrying, which colours the box (in that
+          # order of precedence) so that such a group is noticed without
+          # opening it.
           #
           # The box is a +<details>+ whose +open+ attribute Datastar keeps
           # across the morphs of +/updates+, so one the operator opened stays
@@ -119,6 +120,13 @@ module Sourced
 
             def self.dom_id(namespace) = "namespace-#{namespace.gsub(/[^A-Za-z0-9_-]/, '-')}"
 
+            # The states a namespace counts and is tinted by, most pressing first.
+            COUNTED_STATES = [
+              ConsumerGroupMachine::Failed,
+              ConsumerGroupMachine::Stopped,
+              ConsumerGroupMachine::Retrying
+            ].freeze
+
             def initialize(namespace:, groups:, tip:, registered:)
               @namespace = namespace
               @groups = groups
@@ -127,20 +135,14 @@ module Sourced
             end
 
             def view_template
-              halted = @groups.count { |g| registered?(g) && %w[stopped failed].include?(g[:status]) }
-              retrying = @groups.count { |g| registered?(g) && g[:retry_at] }
-              state = if halted.positive? then 'halted'
-                      elsif retrying.positive? then 'retrying'
-                      else 'ok'
-                      end
-
               details(id: self.class.dom_id(@namespace), class: ['namespace', "namespace-#{state}"], data: { preserve_attr: 'open' }) do
                 summary(class: 'namespace-summary') do
                   strong(class: 'namespace-name') { title }
                   code(class: 'namespace-id') { @namespace }
                   span(class: 'namespace-count') { pluralize(@groups.size, 'group') }
-                  span(class: 'namespace-badge namespace-badge--halted') { "#{halted} stopped" } if halted.positive?
-                  span(class: 'namespace-badge namespace-badge--retrying') { "#{retrying} retrying" } if retrying.positive?
+                  status_counts.each do |status, count|
+                    span(class: "namespace-badge namespace-badge--#{status}") { "#{count} #{status}" } if count.positive?
+                  end
                 end
                 div(class: 'namespace-groups') do
                   @groups.each do |group|
@@ -153,6 +155,22 @@ module Sourced
             private
 
             def registered?(group) = @registered.include?(group[:group_id])
+
+            # How many registered groups are in each of {COUNTED_STATES}, by
+            # state name, in that order of precedence.
+            # @return [Hash{String => Integer}]
+            def status_counts
+              @status_counts ||= begin
+                machines = @groups.select { registered?(it) }.map { GroupCard.machine(it) }
+                COUNTED_STATES.to_h do |state|
+                  [state.state_name.to_s, machines.count { state === it }]
+                end
+              end
+            end
+
+            # The most pressing status any of the groups is in, which tints
+            # the box; 'ok' when none is.
+            def state = status_counts.find { |_, count| count.positive? }&.first || 'ok'
 
             # The module the groups' classes share (+CrossPost+), read off
             # their labels; the namespace id when they share none.
@@ -167,6 +185,10 @@ module Sourced
           # A consumer group's status, controls and how far through the log
           # it is. Its name links to the reactor's page unless +link+ is false.
           #
+          # The group's status is a state of Sourced::ConsumerGroupMachine:
+          # the card reads it as that machine's configuration, and renders
+          # within it (+with_machine+) only the operator commands it accepts.
+          #
           # A group no registered reactor has (its class is gone, its offsets
           # left in the store) is drawn greyed out, with nothing to act on: no
           # controls, no link.
@@ -174,10 +196,37 @@ module Sourced
             # The card's element id, which updates patch by.
             def self.dom_id(group_id) = "group-#{group_id.gsub(/[^A-Za-z0-9_-]/, '-')}"
 
+            # The group's status as a Sourced::ConsumerGroupMachine
+            # configuration, which state constants match in +case+ / +in+.
+            # @param group [Hash] a Store#stats group
+            # @return [Sourced::Machine::Configuration]
+            def self.machine(group) = ConsumerGroupMachine.configuration([group[:status]])
+
+            # Cassette-deck glyphs for the buttons, as SVG paths on a 10x10 box.
+            ICONS = {
+              play: 'M2 1 L9 5 L2 9 Z',
+              stop: 'M1.5 1.5 H8.5 V8.5 H1.5 Z',
+              fast_forward: 'M0.5 1.5 L5 5 L0.5 8.5 Z M5 1.5 L9.5 5 L5 8.5 Z',
+              rewind: 'M9.5 1.5 L5 5 L9.5 8.5 Z M5 1.5 L0.5 5 L5 8.5 Z'
+            }.freeze
+
+            # The operator commands, in the order their buttons show, with
+            # their label, icon and class. Start resumes (plays) a halted
+            # group, and Reset rewinds one to process the log again.
+            CONTROLS = {
+              ConsumerGroupMachine::Start => ['Resume', :play, 'btn-resume'],
+              ConsumerGroupMachine::Stop => ['Stop', :stop, 'btn-stop'],
+              ConsumerGroupMachine::Reset => ['Reset', :rewind, 'btn-reset']
+            }.freeze
+
+            # Start on a retrying group fast-forwards past its wait.
+            RETRY_NOW = ['Retry now', :fast_forward, 'btn-resume'].freeze
+
             def initialize(group:, tip:, link: true, registered: true)
               @group = group
               @link = link && registered
               @registered = registered
+              @machine = self.class.machine(group) if registered
               oldest = group[:oldest_processed]
               newest = group[:newest_processed]
               @min = oldest.positive? ? ((oldest.to_f / tip) * 100) : 0
@@ -186,11 +235,8 @@ module Sourced
 
             def view_template
               group = @group
-              status_class = if !@registered then 'unregistered'
-                             elsif group[:retry_at] then 'retrying'
-                             else group[:status]
-                             end
-              div(id: self.class.dom_id(group[:group_id]), class: ['stream-container', "consumer-#{status_class}"]) do
+              state = @registered ? @machine.value.state_name.to_s : 'unregistered'
+              div(id: self.class.dom_id(group[:group_id]), class: ['stream-container', "consumer-#{state}"]) do
                 div(class: 'stream-label') do
                   strong do
                     label = group[:label] || group[:group_id]
@@ -200,26 +246,14 @@ module Sourced
                       span(title: group[:group_id]) { label }
                     end
                     if @registered
-                      span(class: 'status') do
-                        span { group[:status] }
-                        if group[:retry_at]
-                          span { " (retrying at #{group[:retry_at]})" }
-                        end
-                      end
+                      span(class: 'status') { state }
                     else
                       span(class: 'status', title: 'No registered reactor has this group: these are its stored offsets') { 'not registered' }
                     end
                   end
-                  render_controls(group) if @registered
+                  with_machine(@machine) { render_controls } if @registered
                   small { " (#{group[:partition_count]} partitions)" }
-                  if group[:status] == 'failed' && group[:error_context]&.any?
-                    small(class: 'error-context') do
-                      ctx = group[:error_context]
-                      if ctx[:exception_class]
-                        span { "#{ctx[:exception_class]}: #{ctx[:exception_message]}" }
-                      end
-                    end
-                  end
+                  render_context if @registered
                 end
                 div(class: 'stream-bar') do
                   div(class: 'lower-range', style: "width:#{@min}%") do
@@ -232,22 +266,94 @@ module Sourced
               end
             end
 
-            private def render_controls(group)
-              if group[:status] == 'stopped' || group[:status] == 'failed'
-                command Dashboard::ResumeConsumerGroup do |f|
-                  f.payload_fields(group_id: group[:group_id])
-                  button(type: 'submit', class: 'btn btn-resume') { 'Resume' }
-                end
-              else
-                command Dashboard::StopConsumerGroup do |f|
-                  f.payload_fields(group_id: group[:group_id])
-                  button(type: 'submit', class: 'btn btn-stop') { 'Stop' }
+            private
+
+            def error_context = @group[:error_context] || {}
+
+            def render_controls
+              available = @machine.available_commands
+              CONTROLS.each_key do |cmd_class|
+                next unless available.include?(cmd_class)
+
+                command cmd_class, key: @group[:group_id] do |f|
+                  f.payload_fields(group_id: @group[:group_id])
+                  label, icon, css = control(cmd_class)
+                  button(type: 'submit', class: "btn #{css}") do
+                    svg(class: 'btn-icon', viewBox: '0 0 10 10', aria: { hidden: 'true' }) { |s| s.path(d: ICONS.fetch(icon)) }
+                    plain label
+                  end
                 end
               end
+            end
 
-              command Dashboard::ResetConsumerGroup do |f|
-                f.payload_fields(group_id: group[:group_id])
-                button(type: 'submit', class: 'btn btn-reset') { 'Reset' }
+            # The label, icon and class of +cmd_class+'s button, in this state.
+            def control(cmd_class)
+              return RETRY_NOW if cmd_class == ConsumerGroupMachine::Start && (@machine in ConsumerGroupMachine::Retrying)
+
+              CONTROLS.fetch(cmd_class)
+            end
+
+            # Why a group halted or is retrying: the exception it failed
+            # with, or the operator's stop message.
+            def render_context
+              text = case @machine
+                     in ConsumerGroupMachine::Retrying | ConsumerGroupMachine::Failed
+                       "#{error_context[:exception_class]}: #{error_context[:exception_message]}" if error_context[:exception_class]
+                     in ConsumerGroupMachine::Stopped
+                       error_context[:message]
+                     else nil
+                     end
+              return unless text
+
+              small(class: 'error-context') do
+                if @group[:retry_at] && (@machine in ConsumerGroupMachine::Retrying)
+                  span(class: 'retry-at') { "retry ##{error_context[:retry_count]}, next at #{@group[:retry_at].strftime('%H:%M:%S %Z')} — " }
+                end
+                span { text }
+              end
+            end
+          end
+
+          # A failed group's stored exception and backtrace, in a card of its
+          # own after its GroupCard, collapsed. Datastar keeps +open+ across
+          # the morphs that update the card, so a panel the operator opened
+          # stays open. Frames in installed gems are dimmed, so the app's own
+          # stand out.
+          #
+          # A group that isn't failed renders a hidden placeholder with the
+          # same id, for updates to patch should the group fail.
+          class FailureCard < Component
+            def self.dom_id(group_id) = "#{GroupCard.dom_id(group_id)}-failure"
+
+            def initialize(group:)
+              @group = group
+            end
+
+            def view_template
+              id = self.class.dom_id(@group[:group_id])
+              error_context = @group[:error_context] || {}
+              failed = (GroupCard.machine(@group) in ConsumerGroupMachine::Failed)
+              return div(id:, hidden: true) unless failed && error_context[:exception_class]
+
+              backtrace = Array(error_context[:exception_backtrace])
+              details(id:, class: 'failure-details', data: { preserve_attr: 'open' }) do
+                summary(class: 'failure-summary') do
+                  span { 'Exception and backtrace' }
+                  small { "#{backtrace.size} #{backtrace.size == 1 ? 'frame' : 'frames'}" }
+                end
+                div(class: 'failure-body') do
+                  p(class: 'failure-exception') do
+                    strong { error_context[:exception_class] }
+                    plain ": #{error_context[:exception_message]}"
+                  end
+                  if backtrace.any?
+                    ol(class: 'failure-backtrace') do
+                      backtrace.each do |frame|
+                        li(class: ('is-gem' if frame.include?('/gems/'))) { frame }
+                      end
+                    end
+                  end
+                end
               end
             end
           end
