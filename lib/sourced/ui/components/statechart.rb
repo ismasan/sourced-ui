@@ -509,15 +509,15 @@ module Sourced
         end
 
         # A +drawing+ is [path, [label x, label y, anchor]]. Its line and label
-        # are drawn apart, each in a group with the edge's classes.
+        # are drawn apart, each in a group with the edge's attributes.
         def draw_line(s, edge, (d, _))
-          s.g(class: edge_classes(edge)) do
+          s.g(**edge_attributes(edge)) do
             s.path(d:, 'marker-end': "url(#sc-#{live?(edge) ? 'arrow-live' : 'arrow'})")
           end
         end
 
         def draw_label(s, edge, (_, (x, y, anchor)))
-          s.g(class: edge_classes(edge)) do
+          s.g(**edge_attributes(edge)) do
             s.text(x:, y:, class: 'statechart__edge-label', 'text-anchor': anchor) do
               linked = @href && edge.starts.any?
               linked ? label_with_links(s, edge) : edge.label
@@ -545,8 +545,14 @@ module Sourced
 
         def live?(edge) = (edge.kind in :live | :data_live)
 
-        def edge_classes(edge)
-          ['statechart__edge', "statechart__edge--#{edge.kind}", ('is-live' if live?(edge))].compact.join(' ')
+        # Its classes, and the ids of the states it leaves and reaches, as
+        # +data-from+ and +data-to+: the state a line is drawn to, so one
+        # re-entering a parallel checkpoint reaches the start of its region.
+        def edge_attributes(edge)
+          {
+            class: ['statechart__edge', "statechart__edge--#{edge.kind}", ('is-live' if live?(edge))].compact.join(' '),
+            data: { from: edge.from, to: edge.to }
+          }
         end
 
         # A path between two boxes no region lays out (between a parallel
