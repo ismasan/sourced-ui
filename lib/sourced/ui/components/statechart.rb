@@ -68,22 +68,22 @@ module Sourced
 
         ROOT = [:root].freeze
 
-        # @param chart [Hash] Machine#to_h or Machine.to_h
+        # @param chart [#to_h] a Sourced::Machine instance or class, or the Hash its #to_h returns
         # @param title [String] accessible name for the drawing
         # @param href [#call, nil] a child machine's URL from its group_id, or nil
         #   for none: the machines a transition starts link to it
         def initialize(chart, title: nil, href: nil)
-          @chart = chart
+          @chart = chart.to_h
           @href = href
-          @title = title || "#{chart[:machine]} statechart"
-          @escalations = escalations_in(chart)
-          @command_labels = MachineChart.command_labels(chart)
+          @title = title || "#{@chart[:machine]} statechart"
+          @escalations = escalations_in(@chart)
+          @command_labels = MachineChart.command_labels(@chart)
           @boxes = {}
           @histories = {}     # a parallel checkpoint's history node id => the checkpoint's id
           @parent_region = {} # node id => the key of the region it's in
           @region_owner = {}  # region key => the checkpoint it belongs to (nil for the root)
           @region_start = {}  # region key => its initial position
-          index(chart, ROOT, nil)
+          index(@chart, ROOT, nil)
           @placed = Hash.new { |h, k| h[k] = [] } # region key => its Placements
           @loops = []
           @direct = []
