@@ -1,24 +1,107 @@
 # Sourced::UI
 
-TODO: Delete this and the text below, and describe your gem
+Web UI for [Sourced](https://github.com/ismasan/sourced) event-sourced apps. It gives you two things:
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/sourced/ui`. To experiment with that code, run `bin/console` for an interactive prompt.
+- **A monitoring dashboard**, as a Rack app you mount in your own app. It shows the event store's e and recent messages, the causation tree of each message, your registered reactors and how they connect, and their consumer groups with their offsets and errors. You can start, stop and reset consumer groups from it, and it draws each machine's statechart and event model.
+- **Components** for your own pages, such as `Statechart`, which draws a `Sourced::Machine` as an SVG statechart. They're [Phlex](https://www.phlex.fun) components built on [Sidereal](https://github.com/ismasan/sidereal)'s, which use [Datastar](https://data-star.dev) for live updates.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Add the gem to your Gemfile. It isn't on RubyGems yet, so install it, Sourced and Sidereal from GitHub:
 
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```ruby
+gem 'sourced', github: 'ismasan/sourced'
+gem 'sidereal', github: 'ismasan/sidereal'
+gem 'sourced-ui', github: 'ismasan/sourced-ui'
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+## Setup
 
-```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+### Mounting the dashboard in a Rack app
+
+`Sourced::UI::Dashboard` is a Rack app. It reads from `Sourced.store` and lists the reactors registered with Sourced, so configure and start Sourced first, then mount the dashboard under a path in `config.ru`:
+
+```ruby
+# config.ru
+require 'sequel'
+require 'sourced'
+require 'sourced/ui/dashboard'
+
+Sourced.config.component!('db') do
+  build { Sequel.sqlite('db/events.db') }
+  teardown(&:disconnect)
+end
+Sourced.register(MyDecider)
+Sourced.register(MyProjector)
+Sourced.start!
+
+map '/sourced' do
+  run Sourced::UI::Dashboard
+end
+
+map '/' do
+  run MyApp
+end
 ```
+
+Sourced expects its tables to exist: create them with a migration, or set `Sourced.config.config!('store.install_tables') { true }` in development. See Sourced's README for that, and for running its workers inside your web server or in a separate process.
+
+The dashboard builds its links and asset URLs from the path it's mounted under, so any path works. It serves its own stylesheet.
+
+The dashboard has no authentication of its own, and its commands can stop and reset consumer groups. In production, mount it behind your app's authentication (for example, a Rack middleware inside the `map` block).
+
+It keeps a session cookie, signed with `ENV['SOURCED_DASHBOARD_SESSION_SECRET']`. Set that variable to a random string of at least 64 characters in production; the built-in default is only fit for development.
+
+### Mounting it next to a Sidereal app
+
+With Sidereal's Sourced integration (`Sidereal.config.use Sidereal::Integrations::Sourced`), Sidereal mounts Sourced's configuration, so `Sourced.store` is your app's store and the dashboard shows your app's messages and reactors. A Sidereal app is a Rack app too, so mount both from `config.ru`:
+
+```ruby
+# config.ru
+require_relative 'boot'           # loads your app and applies the Sourced integration
+require 'sourced/ui/dashboard'
+
+map '/sourced' do
+  run Sourced::UI::Dashboard
+end
+
+map '/' do
+  run MyApp                       # your Sidereal::App
+end
+```
+
+### Header links
+
+To add links to the dashboard's header (back to your app, for example), configure them once at boot:
+
+```ruby
+Sourced::UI::Dashboard.configure do |config|
+  config.header_links([
+    { label: 'Back to app', href: '/', url: false },  # url: false leaves href as is
+    { label: 'Reactors', href: '/topology' }          # by default, href is relative to the dashboard's mount path
+  ])
+end
+```
+
+`configure` freezes the configuration, so call it only once.
+
+### Using the components in your own pages
+
+Require the components and render them from any Phlex view, including a Sidereal app's pages and components:
+
+```ruby
+require 'sourced/ui/components'
+
+class OrderStatus < Sidereal::Components::BaseComponent
+  def initialize(order) = @order = order  # a Sourced::Machine instance
+
+  def view_template
+    render Sourced::UI::Components::Statechart.new(@order, title: 'Order status')
+  end
+end
+```
+
+The components' CSS ships with the dashboard's stylesheet (see [Legend and styles](#legend-and-styles)).
 
 ## Usage
 
