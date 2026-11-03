@@ -4,6 +4,7 @@
 # component, so requiring 'sourced/ui/dashboard' is self-sufficient and
 # does not depend on the host app requiring 'sourced' first.
 require 'sourced/ui'
+require 'rack/auth/basic'
 require 'sourced/ui/dashboard/app'
 
 module Sourced
@@ -54,8 +55,29 @@ module Sourced
 
         Links = Sourced::Types::Array[Link]
 
+        BasicAuth = Data.define(:username, :password, :realm) do
+          def authenticate?(given_username, given_password)
+            # Compare both so a wrong username doesn't short-circuit the timing.
+            user_ok = Rack::Utils.secure_compare(username, given_username.to_s)
+            pass_ok = Rack::Utils.secure_compare(password, given_password.to_s)
+            user_ok & pass_ok
+          end
+        end
+
         def initialize
           @header_links = []
+          @basic_auth = nil
+        end
+
+        def basic_auth(username = nil, password = nil, realm: 'Sourced Dashboard')
+          return @basic_auth if username.nil? && password.nil?
+
+          case [username, password]
+          in [String => u, String => p] unless u.empty? || p.empty?
+            @basic_auth = BasicAuth.new(username: u, password: p, realm:)
+          else
+            raise ArgumentError, 'basic_auth expects non-empty username and password strings'
+          end
         end
 
         def header_links(links = nil)
@@ -65,15 +87,26 @@ module Sourced
         end
       end
 
-      def self.call(env) = App.call(env)
+      def self.call(env) = @@app.call(env)
 
       @@configuration = Configuration.new
+      @@app = App
 
       def self.configuration = @@configuration
 
       def self.configure(&)
         yield(@@configuration) if block_given?
+        @@app = build_app(@@configuration)
         @@configuration.freeze
+      end
+
+      def self.build_app(config, app = App)
+        auth = config.basic_auth
+        return app unless auth
+
+        Rack::Auth::Basic.new(app, auth.realm) do |username, password|
+          auth.authenticate?(username, password)
+        end
       end
     end
   end
