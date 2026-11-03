@@ -48,7 +48,16 @@ Sourced expects its tables to exist: create them with a migration, or set `Sourc
 
 The dashboard builds its links and asset URLs from the path it's mounted under, so any path works. It serves its own stylesheet.
 
-The dashboard has no authentication of its own, and its commands can stop and reset consumer groups. In production, mount it behind your app's authentication (for example, a Rack middleware inside the `map` block).
+The dashboard's commands can stop and reset consumer groups, so protect it in production. It supports HTTP Basic Auth out of the box:
+
+```ruby
+Sourced::UI::Dashboard.configure do |config|
+  config.basic_auth ENV.fetch('DASHBOARD_USER'), ENV.fetch('DASHBOARD_PASSWORD')
+  # optional: config.basic_auth user, password, realm: 'Ops'
+end
+```
+
+For anything else, mount it behind your app's authentication (for example, a Rack middleware inside the `map` block).
 
 It keeps a session cookie, signed with `ENV['SOURCED_DASHBOARD_SESSION_SECRET']`. Set that variable to a random string of at least 64 characters in production; the built-in default is only fit for development.
 

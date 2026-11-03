@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 
+require 'rack/test'
 require 'sourced/ui/dashboard'
 
 RSpec.describe Sourced::UI::Dashboard do
@@ -43,6 +44,52 @@ RSpec.describe Sourced::UI::Dashboard do
       expect(tree[0].message).to eq(e1)
       expect(tree[0].children[0].message).to eq(e2)
       expect(tree[0].children[0].children[0].message).to eq(e3)
+    end
+  end
+
+  describe '.build_app' do
+    include Rack::Test::Methods
+
+    let(:inner) { ->(_env) { [200, { 'content-type' => 'text/plain' }, ['ok']] } }
+    let(:config) { Sourced::UI::Dashboard::Configuration.new }
+    let(:app) { Sourced::UI::Dashboard.build_app(config, inner) }
+
+    it 'returns the app unwrapped when basic auth is not configured' do
+      expect(app).to be(inner)
+    end
+
+    context 'with basic auth' do
+      before { config.basic_auth('admin', 's3cret') }
+
+      it 'rejects requests without credentials' do
+        get '/'
+        expect(last_response.status).to eq(401)
+        expect(last_response.headers['www-authenticate']).to eq('Basic realm="Sourced Dashboard"')
+      end
+
+      it 'rejects wrong credentials' do
+        basic_authorize 'admin', 'nope'
+        get '/'
+        expect(last_response.status).to eq(401)
+      end
+
+      it 'allows correct credentials' do
+        basic_authorize 'admin', 's3cret'
+        get '/'
+        expect(last_response.status).to eq(200)
+        expect(last_response.body).to eq('ok')
+      end
+
+      it 'uses a custom realm' do
+        config.basic_auth('admin', 's3cret', realm: 'Ops')
+        get '/'
+        expect(last_response.headers['www-authenticate']).to eq('Basic realm="Ops"')
+      end
+    end
+
+    it 'raises on blank credentials' do
+      expect { config.basic_auth('admin', '') }.to raise_error(ArgumentError)
+      expect { config.basic_auth(nil, 'x') }.to raise_error(ArgumentError)
     end
   end
 end
