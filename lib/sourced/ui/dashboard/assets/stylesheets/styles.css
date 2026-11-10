@@ -930,7 +930,19 @@ h2 {
 
   .event-type {
     background-color: #fbe4be;
+    color: #774a18;
     a { color: #774a18; }
+  }
+}
+
+/* A machine's state change: lit as its states are on the statechart */
+.event-card.state {
+  border-left-color: var(--teal-600);
+
+  .event-type {
+    background-color: var(--teal-50);
+    color: var(--teal-700);
+    a { color: var(--teal-700); }
   }
 }
 
@@ -1383,12 +1395,11 @@ dl.prop-table {
   align-items: start;
 }
 
+/* In the page's flow, however long: no scroller of its own. Its column
+   may narrow its panels, which truncate what doesn't fit. */
 .reactor__aside {
-  position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
 
@@ -1624,8 +1635,8 @@ dl.prop-table {
   background-size: 16px 16px;
 
   .statechart { min-width: calc(var(--sc-w) * 0.8); }
-  .statechart__node { cursor: pointer; }
-  .statechart__node:hover > .statechart__box { stroke: var(--teal-600); }
+  &:not(.chart-card__canvas--instance) .statechart__node { cursor: pointer; }
+  &:not(.chart-card__canvas--instance) .statechart__node:hover > .statechart__box { stroke: var(--teal-600); }
 }
 .chart-card__legend {
   border-top: 1px solid var(--slate-200);
@@ -1889,10 +1900,180 @@ dl.prop-table {
 @media (max-width: 1000px) {
   .reactor { padding: 1rem; }
   .reactor__layout { grid-template-columns: minmax(0, 1fr); }
-  .reactor__aside { position: static; max-height: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .statechart__box { transition: none; }
   .switch__track, .switch__track::after { transition: none; }
 }
+
+/* Opening a machine instance, from the machine's page */
+.instance-form {
+  display: grid;
+  gap: 0.6rem;
+
+  .btn { justify-self: start; }
+}
+.instance-form__field {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--slate-500);
+
+  span { font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace; }
+  input {
+    font: inherit;
+    font-weight: 400;
+    font-size: 13px;
+    color: var(--slate-800);
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--slate-300);
+    border-radius: 6px;
+    background: white;
+  }
+  input:focus { outline: 2px solid var(--teal-400); outline-offset: 0; border-color: var(--teal-600); }
+}
+
+.json-block {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  background: var(--slate-50);
+  border: 1px solid var(--slate-100);
+  font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace;
+  font-size: 12px;
+  color: var(--slate-700);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+
+/* An instance's messages as a tree: each command a root, the events it
+   appended its branches. A dot coloured by kind tells them apart (as the
+   log's cards do with their bars): commands blue, state changes teal, data
+   events amber. */
+.feed-tree {
+  --row: 28px;
+  --dot: 8px;
+  --gutter: 8px; /* the link's own left padding */
+  --indent: 18px;
+  --branch: var(--slate-300);
+
+  list-style: none;
+  margin: 0 -0.5rem; /* rows' highlights reach the panel's padding */
+  padding: 0;
+  font-size: 13px;
+}
+.feed-group { margin-bottom: 6px; }
+.feed-group__messages { list-style: none; margin: 0; padding: 0; }
+
+.feed-item { position: relative; }
+.feed-item.is-caused { padding-left: var(--indent); }
+/* Its branch: from the row above's dot (the command's, or a sibling's
+   branch) down and across to its own. Consecutive ones join into a trunk. */
+.feed-item.is-caused::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--gutter) + var(--dot) / 2 - 0.5px);
+  top: calc(var(--row) / -2);
+  width: calc(var(--indent) - var(--dot) / 2 - 2px);
+  height: var(--row);
+  border-left: 1px solid var(--branch);
+  border-bottom: 1px solid var(--branch);
+  border-bottom-left-radius: 6px;
+  pointer-events: none;
+}
+/* Siblings below continue the trunk past the elbow. */
+.feed-item.is-caused:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--gutter) + var(--dot) / 2 - 0.5px);
+  top: calc(var(--row) / 2);
+  height: calc(var(--row) / 2);
+  border-left: 1px solid var(--branch);
+  pointer-events: none;
+}
+
+.feed-item__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--row);
+  padding: 0 8px 0 var(--gutter);
+  border-radius: 6px;
+  color: var(--slate-600);
+  text-decoration: none;
+  transition: background-color 0.1s;
+}
+.feed-item__link:hover { background: var(--slate-50); }
+
+.feed-item__dot {
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--slate-300);
+  position: relative; /* over its branch */
+}
+.feed-item__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Its log position: a chip, never cut short (global positions get long),
+   the name giving way instead. Right-aligned against the time's fixed width,
+   so they line up. */
+.feed-item__pos {
+  flex: none;
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--slate-100);
+  color: var(--slate-700);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.feed-item__time {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--slate-400);
+}
+.feed-item__time--blank { visibility: hidden; }
+
+.feed-item--command .feed-item__dot { background: #1976d2; }
+.feed-item--command .feed-item__name { color: var(--slate-800); font-weight: 600; }
+.feed-item--state .feed-item__dot { background: var(--teal-600); }
+.feed-item--state .feed-item__name { color: var(--teal-700); }
+.feed-item--event .feed-item__dot { background: var(--amber-400); }
+.feed-item--start .feed-item__dot { background: #fff; box-shadow: inset 0 0 0 1.5px var(--slate-400); }
+.feed-item--start .feed-item__name { color: var(--slate-400); font-style: italic; }
+
+/* Where the chart is: a tinted row, its dot ringed. */
+.feed-item.is-current .feed-item__link { background: var(--slate-100); }
+.feed-item.is-current .feed-item__name { font-weight: 600; }
+.feed-item.is-current .feed-item__pos { background: var(--slate-800); color: #fff; }
+.feed-item.is-current .feed-item__dot { box-shadow: 0 0 0 2.5px var(--slate-100), 0 0 0 4px currentColor; }
+.feed-item--command.is-current .feed-item__dot { color: #1976d2; }
+.feed-item--state.is-current .feed-item__dot { color: var(--teal-600); }
+.feed-item--event.is-current .feed-item__dot { color: var(--amber-400); }
+.feed-item--start.is-current .feed-item__dot { color: var(--slate-400); box-shadow: inset 0 0 0 1.5px var(--slate-400), 0 0 0 2.5px var(--slate-100), 0 0 0 4px var(--slate-400); }
+/* After where the chart is: not yet happened, as far as it shows. */
+.feed-item.is-future .feed-item__link { opacity: 0.45; }
+.feed-item.is-future .feed-item__link:hover { opacity: 0.8; }
+
+.feed-nav {
+  margin: 0 0 0 auto;
+  gap: 0.25rem;
+  align-self: center;
+
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:disabled:hover { background: var(--slate-50); border-color: var(--slate-300); }
+}
+.feed-nav + .panel__link { margin-left: 0.5rem; }

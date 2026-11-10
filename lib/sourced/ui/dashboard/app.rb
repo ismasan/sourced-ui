@@ -13,6 +13,7 @@ require 'sourced/ui/dashboard/components/events_tree'
 require 'sourced/ui/dashboard/components/topology_page'
 require 'sourced/ui/dashboard/components/offsets_page'
 require 'sourced/ui/dashboard/components/reactor_page'
+require 'sourced/ui/dashboard/components/machine_instance_page'
 
 module Sourced
   module UI
@@ -186,7 +187,70 @@ module Sourced
           render_reactor(group_id, state)
         end
 
+        # A machine instance, from its partition values in the query: at the
+        # log position +at+, or at the latest.
+        get '/reactors/:group_id/instance' do |group_id:|
+          render_instance(find_machine(group_id))
+        end
+
+        # The instance at the latest, patched in as messages after +after+
+        # arrive in its partition.
+        get '/reactors/:group_id/instance/updates' do |group_id:|
+          machine = find_machine(group_id)
+          values = partition_values(machine)
+          types = MachineTimeline.message_types(machine)
+          last = request.params['after'].to_i
+
+          datastar.stream do |sse|
+            while true
+              sleep 0.5
+              next if store.read_partition(values, handled_types: types, after_position: last).messages.empty?
+
+              timeline = MachineTimeline.load(machine, values, store:)
+              last = timeline.last_position
+              sse.patch_elements Components::MachineInstance.new(reactor: machine, reactors: Sourced.router.reactors, timeline:)
+            end
+          end
+        end
+
         private
+
+        # A Datastar request (a message picked in the instance's feed) gets
+        # the page patched in place, and its URL pushed: the partition values
+        # and +at+ alone, not Datastar's own params.
+        def render_instance(machine)
+          values = partition_values(machine)
+          at = request.params['at']&.then { Integer(it, exception: false) }&.clamp(0..)
+          page = Components::MachineInstancePage.new(
+            reactor: machine,
+            reactors: Sourced.router.reactors,
+            timeline: MachineTimeline.load(machine, values, store:),
+            at:,
+            layout: !datastar.sse?
+          )
+          return component(page) unless datastar.sse?
+
+          # One patch, then closed: no heartbeat keeping it open.
+          datastar.stream(heartbeat: false) do |sse|
+            sse.patch_elements page
+            sse.execute_script "history.pushState({}, '', #{page.href.to_json})"
+          end
+        end
+
+        def find_machine(group_id)
+          machine = Sourced.router.reactors.find { it.group_id == group_id }
+          halt 404, 'Not found' unless Module === machine && machine <= Sourced::Machine
+          machine
+        end
+
+        # A value for each of the machine's partition keys, from the query:
+        # only those, so Datastar's own `datastar` param doesn't count.
+        def partition_values(machine)
+          values = Array(machine.partition_keys).to_h { |key| [key.to_sym, request.params[key.to_s].to_s.strip] }
+          missing = values.select { _2.empty? }.keys
+          halt 400, "Missing values for partition keys: #{missing.join(', ')}" if missing.any?
+          values
+        end
 
         # A Datastar request (a state picked on a machine's page) gets the
         # page patched in place, and its URL pushed onto the browser's

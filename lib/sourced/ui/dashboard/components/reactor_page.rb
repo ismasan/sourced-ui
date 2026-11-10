@@ -213,6 +213,7 @@ module Sourced
               end
 
               aside(class: 'reactor__aside', aria: { label: 'States' }) do
+                render_instance_form
                 render_states
                 render_relations
               end
@@ -369,6 +370,29 @@ module Sourced
           end
 
           # ---- The sidebar ----
+
+          # Opens an instance's page, from a value for each partition key:
+          # the chart lit where it is, its messages to travel through.
+          def render_instance_form
+            keys = Array(@reactor.partition_keys)
+            return if keys.empty?
+
+            section(class: 'panel panel--aside') do
+              div(class: 'panel__head') do
+                h2 { 'Inspect an instance' }
+                p(class: 'note') { 'Load one by its partition, and travel through its messages.' }
+              end
+              form(method: 'get', action: "#{base_href}/instance", class: 'instance-form') do
+                keys.each do |key|
+                  label(class: 'instance-form__field') do
+                    span { key.to_s }
+                    input(type: 'text', name: key.to_s, required: true, autocomplete: 'off', spellcheck: 'false')
+                  end
+                end
+                button(type: 'submit', class: 'btn') { 'Open instance' }
+              end
+            end
+          end
 
           def render_states
             section(class: 'panel panel--aside') do
