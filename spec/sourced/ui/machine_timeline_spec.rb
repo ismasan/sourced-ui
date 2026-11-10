@@ -39,6 +39,24 @@ RSpec.describe Sourced::UI::MachineTimeline do
     expect(timeline.at.machine.paths).to eq(['on'])
   end
 
+  describe '#groups' do
+    # As appended by Sourced.handle!: each command's events caused by it,
+    # with one appended for no command in the partition.
+    let(:messages) do
+      install, toggle = [SpecLight::Install, SpecLight::Toggle].map { it.new(payload: keys) }
+      off, on = decided(SpecLight, keys, install, toggle)
+      [install, install.correlate(off), SpecLight::Dimmed.new(payload: keys), toggle, toggle.correlate(on)]
+        .each_with_index.map { |m, i| Sourced::PositionedMessage.new(m, i + 10) }
+    end
+
+    it 'groups its steps by the command each was appended for, in log order' do
+      groups = timeline.groups
+      expect(groups.map { it.command&.position }).to eq([10, nil, 13])
+      expect(groups.map { it.steps.map(&:position) }).to eq([[10, 11], [12], [13, 14]])
+      expect(groups.map(&:position)).to eq([10, 12, 13])
+    end
+  end
+
   it 'finds the step at or before a position' do
     expect(timeline.step_at(12).position).to eq(12)
     expect(timeline.step_at(100).position).to eq(15)

@@ -295,8 +295,8 @@ RSpec.describe Sourced::UI::Dashboard::App do
       keys = { light_id: 'lamp-1' }
       [SpecLight::Install, SpecLight::Toggle, SpecLight::Dim].each { Sourced.handle!(SpecLight, it.new(payload: keys)) }
       Sourced.store.append([SpecLight::Install.new(payload: { light_id: 'lamp-2' })])
-      @positions = Sourced.store.read_partition(keys, handled_types: %w[spec_light.runtime.off spec_light.runtime.on])
-                                .messages.to_h { [it.type.split('.').last, it.position] }
+      types = Sourced::UI::MachineTimeline.message_types(SpecLight)
+      @positions = Sourced.store.read_partition(keys, handled_types: types).messages.to_h { [it.type.split('.').last, it.position] }
     end
 
     def instance_page(query, env = {})
@@ -316,9 +316,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
       body = instance_page(light_id: 'lamp-1')
       expect(last_response.status).to eq(200)
       expect(body).to match(/is-active" id="sc-on"/)
-      expect(body).to include('Events (3)', '>→ off<', '>→ on<', '>dimmed<', 'The latest. Following.')
-      # Its commands aren't in the feed: they're in what it accepts.
-      expect(body[/<ol class="timeline">.*?<\/ol>/m]).not_to include('event-card command')
+      expect(body).to include('Messages (6)', '>→ off<', '>→ on<', '>dimmed<', 'The latest. Following.')
       # A state change reads as where it went, not as its event's type.
       expect(body).not_to include('>runtime.on<')
       expect(body).not_to include('lamp-2')
@@ -333,39 +331,39 @@ RSpec.describe Sourced::UI::Dashboard::App do
       expect(body).to match(/is-active" id="sc-off"/)
       expect(body).not_to match(/is-active" id="sc-on"/)
       expect(body).to include("As of position #{@positions['off']}.", 'Back to latest', 'is-future')
-      expect(body).to match(/href="[^"]*at=#{@positions['off']}"[^>]*class="timeline__link" aria-current="true"/)
+      expect(body).to match(/href="[^"]*at=#{@positions['off']}"[^>]*class="feed-item__link" aria-current="true"/)
       expect(body).not_to include('instance/updates')
     end
 
-    it "marks a machine's state changes apart from its data events, in its feed and in the log" do
+    it "groups its feed by command, marking state changes apart from data events, in its feed and in the log" do
       body = instance_page(light_id: 'lamp-1')
-      feed = body[/<ol class="timeline">.*?<\/ol>/m]
-      expect(feed).to match(/class="event-card state[^"]*">[^\n]*?>→ on</)
-      expect(feed).to match(/class="event-card event[^"]*">[^\n]*?>dimmed</)
-      # Each with the command it was appended for.
-      expect(feed).to match(/>dimmed<\/span><span class="feed-trigger"[^>]*>by <span class="feed-trigger__name">dim</)
-      expect(feed).to match(/>→ on<\/span><span class="feed-trigger"[^>]*>by <span class="feed-trigger__name">toggle</)
-      # The latest first, down to where it starts.
-      expect(feed.scan(/class="event-type">([^<]*)</).flatten).to eq(['dimmed', '→ on', '→ off', 'Start'])
+      feed = body[%r{<ol class="feed-tree">.*?</section>}m]
+      expect(feed).to match(/<li class="feed-item feed-item--command">[^\n]*?>dim</)
+      expect(feed).to match(/class="feed-item feed-item--state is-caused[^"]*">[^\n]*?>→ on</)
+      expect(feed).to match(/class="feed-item feed-item--event is-caused[^"]*">[^\n]*?>dimmed</)
+      # The latest command first, each over what it appended, down to where it starts.
+      expect(feed.scan(/<li class="feed-group">/).size).to eq(3)
+      expect(feed.scan(/class="feed-item__name">([^<]*)</).flatten)
+        .to eq(['dim', 'dimmed', 'toggle', '→ on', 'install', '→ off', 'Start'])
 
       get "/log/#{@positions['on']}"
       expect(last_response.body).to include('class="event-card fade-in state"', 'class="event-card fade-in command"')
     end
 
-    it 'steps to the older and newer event with arrows, disabled where there are none' do
+    it 'steps to the older and newer message in log order with arrows, disabled where there are none' do
       nav = ->(body) { body[%r{<span class="pagination feed-nav">.*?</span>}m].scan(/<button[^>]*>/) }
 
       older, newer = nav.(instance_page(light_id: 'lamp-1'))
-      expect(older).to include("at=#{@positions['on']}") # dimmed is latest; on is before it
+      expect(older).to include("at=#{@positions['dim']}") # dimmed is latest; its command is before it
       expect(newer).to include('disabled')
 
       older, newer = nav.(instance_page(light_id: 'lamp-1', at: @positions['off']))
-      expect(older).to include('at=0')
-      expect(newer).to include("at=#{@positions['on']}")
+      expect(older).to include("at=#{@positions['install']}")
+      expect(newer).to include("at=#{@positions['toggle']}")
 
       older, newer = nav.(instance_page(light_id: 'lamp-1', at: 0))
       expect(older).to include('disabled')
-      expect(newer).to include("at=#{@positions['off']}")
+      expect(newer).to include("at=#{@positions['install']}")
     end
 
     it 'travels back to before its first message' do
@@ -386,7 +384,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
     it 'shows a partition with no messages where the machine starts' do
       body = instance_page(light_id: 'nope')
       expect(last_response.status).to eq(200)
-      expect(body).to include('Events (0)', 'No messages yet')
+      expect(body).to include('Messages (0)', 'No messages yet')
     end
 
     it 'draws an instance of a machine with nested and parallel states' do
@@ -419,7 +417,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
         streaming&.stop
         [reader, writer].each { it&.close unless it&.closed? }
       end
-      expect(chunk).to include('event: datastar-patch-elements', 'id="machine-instance"', 'Events (3)')
+      expect(chunk).to include('event: datastar-patch-elements', 'id="machine-instance"', 'Messages (6)')
     end
 
     it "refuses missing partition values, and reactors that aren't machines" do

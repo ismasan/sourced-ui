@@ -230,64 +230,67 @@ module Sourced
 
           # ---- The sidebar: its messages ----
 
-          # Its events only: the commands it took show in what each point
-          # accepts, below the chart.
+          # Its messages, grouped by command: each command over what it
+          # appended, in log order, with the latest groups first.
           def render_feed
-            events = @timeline.steps.reject { Sourced::Command === it.message }
-            # The event the page is at: the last at or before its position.
-            current = @step && events.reverse_each.find { it.position <= @step.position }
+            steps = @timeline.steps
 
             section(class: 'panel panel--aside') do
               div(class: 'panel__head') do
-                h2 { "Events (#{events.size})" }
-                feed_nav(events, current)
+                h2 { "Messages (#{steps.size})" }
+                feed_nav(steps)
                 a(href:, class: 'panel__link', data: travel(href)) { 'Latest' } if @at
               end
 
-              # The dashboard's event cards, each a link to travel to it: the
-              # latest first, down to where the machine starts.
-              ol(class: 'timeline') do
-                events.reverse_each do |step|
-                  message = step.message
-                  title = "#{message.type} · #{message.created_at.localtime.strftime('%Y-%m-%d %H:%M:%S')}"
-                  feed_item(href(at: step.position), current: step == current, kind: MessageRow.kind(message), title:,
-                                                      future: !current || step.position > current.position) do
-                    span(class: 'event-sequence') { message.position.to_s }
-                    # A state change reads as where it went: `→ hotel_chosen`.
-                    targets = move_targets(step)
-                    span(class: 'event-type') { targets ? "→ #{targets.join(', ')}" : short_type(message.type) }
-                    # The command it was appended for: the gap before it in the log.
-                    if (command = trigger(message))
-                      span(class: 'feed-trigger', title: "#{command.type} (##{command.position})") do
-                        plain 'by '
-                        span(class: 'feed-trigger__name') { short_type(command.type) }
-                      end
-                    end
-                    time(class: 'event-timestamp', datetime: message.created_at.utc.iso8601) do
-                      message.created_at.localtime.strftime('%H:%M:%S')
+              # A tree: each command over what it appended, each message a link
+              # to travel to it, down to where the machine starts.
+              ol(class: 'feed-tree') do
+                @timeline.groups.reverse_each do |group|
+                  li(class: 'feed-group') do
+                    ol(class: 'feed-group__messages') do
+                      group.steps.each { feed_step(it, caused: !group.command.nil? && it != group.command) }
                     end
                   end
                 end
 
-                feed_item(href(at: 0), current: current.nil?, future: false, kind: 'start', title: 'Before its first message') do
-                  span(class: 'event-sequence') { '0' }
-                  span(class: 'event-type') { 'Start' }
+                feed_item(href(at: 0), current: @step.nil?, future: false, kind: 'start', title: 'Before its first message') do
+                  span(class: 'feed-item__name') { 'Start' }
+                  span(class: 'feed-item__pos') { '0' }
+                  # No time: a blank as wide, so its position lines up with the others'.
+                  span(class: 'feed-item__time feed-item__time--blank', aria: { hidden: 'true' }) { '00:00:00' }
                 end
               end
             end
           end
 
-          # ← and → step to the event before and after the current one (or
-          # where it starts), as the log's do: disabled at either end.
-          def feed_nav(events, current)
-            points = [nil, *events] # nil: where it starts
-            at = current ? points.index(current) : 0
+          # A command, or an event: indented under the command it was
+          # appended for, if +caused+.
+          def feed_step(step, caused:)
+            message = step.message
+            title = "#{message.type} · #{message.created_at.localtime.strftime('%Y-%m-%d %H:%M:%S')}"
+            feed_item(href(at: step.position), current: step == @step, kind: MessageRow.kind(message), title:,
+                                                future: !@step || step.position > @step.position, caused:) do
+              # A state change reads as where it went: `→ hotel_chosen`.
+              targets = move_targets(step)
+              span(class: 'feed-item__name') { targets ? "→ #{targets.join(', ')}" : short_type(message.type) }
+              span(class: 'feed-item__pos') { message.position.to_s }
+              time(class: 'feed-item__time', datetime: message.created_at.utc.iso8601) do
+                message.created_at.localtime.strftime('%H:%M:%S')
+              end
+            end
+          end
+
+          # ← and → step to the message before and after the current one (or
+          # where it starts), in log order: disabled at either end.
+          def feed_nav(steps)
+            points = [nil, *steps] # nil: where it starts
+            at = @step ? points.index(@step) : 0
             older = points[at - 1] if at.positive?
             newer = points[at + 1]
 
             span(class: 'pagination feed-nav') do
-              nav_button('&larr;', 'Older event', at.positive? && href(at: older&.position || 0))
-              nav_button('&rarr;', 'Newer event', newer && href(at: newer.position))
+              nav_button('&larr;', 'Older message', at.positive? && href(at: older&.position || 0))
+              nav_button('&rarr;', 'Newer message', newer && href(at: newer.position))
             end
           end
 
@@ -296,24 +299,22 @@ module Sourced
                    data: href ? travel(href).transform_keys { it.sub('__prevent', '') } : {}) { safe(arrow) }
           end
 
-          def feed_item(href, current:, future:, kind:, title:, &)
-            classes = ['event-card', kind, ('highlighted' if current), ('is-future' if future)].compact
+          # A row in the tree: a dot coloured by its +kind+ (a command, a
+          # state change, a data event, or where it starts), then what yields.
+          def feed_item(href, current:, future:, kind:, title:, caused: false)
+            classes = ['feed-item', "feed-item--#{kind}", ('is-caused' if caused), ('is-current' if current),
+                       ('is-future' if future)].compact
             li(class: classes.join(' ')) do
-              a(href:, title:, class: 'timeline__link', aria: { current: current ? 'true' : nil }, data: travel(href), &)
+              a(href:, title:, class: 'feed-item__link', aria: { current: current ? 'true' : nil }, data: travel(href)) do
+                span(class: 'feed-item__dot', aria: { hidden: 'true' })
+                yield
+              end
             end
           end
 
           # ---- Helpers ----
 
           def short_type(type) = type.delete_prefix("#{@reactor.message_prefix}.")
-
-          # The command in its partition that +message+ was appended for (its
-          # causation), or nil: one the instance started from itself, say.
-          def trigger(message)
-            @messages_by_id ||= @timeline.messages.to_h { [it.id, it] }
-            cause = @messages_by_id[message.causation_id]
-            cause if Sourced::Command === cause
-          end
 
           # The names of the states a step's message moved the machine to: those
           # it entered, or, re-entering one already active, its event's target.

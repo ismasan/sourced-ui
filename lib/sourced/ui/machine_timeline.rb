@@ -40,6 +40,14 @@ module Sourced
         (machine.handled_messages + machine.handled_messages_for_evolve).map(&:type) | defined
       end
 
+      # A command in the partition and the steps of what it appended (those
+      # caused by it), in log order. A run of events appended for no command
+      # in the partition (by another reactor, say) makes a group without one.
+      MessageGroup = Data.define(:command, :events) do
+        def steps = command ? [command, *events] : events
+        def position = steps.first.position
+      end
+
       attr_reader :machine, :values, :steps
 
       # @param messages [Array<Sourced::PositionedMessage>] the partition's, in log order
@@ -58,6 +66,29 @@ module Sourced
 
       def messages = steps.map(&:message)
       def empty? = steps.empty?
+
+      # Its steps grouped by the command each was appended for, in log order.
+      #
+      # @return [Array<MessageGroup>]
+      def groups
+        @groups ||= begin
+          groups = []
+          by_command = {} # command id => its group's events
+          steps.each do |step|
+            message = step.message
+            if Sourced::Command === message
+              groups << [step, by_command[message.id] = []]
+            elsif (events = by_command[message.causation_id])
+              events << step
+            elsif groups.last && groups.last.first.nil?
+              groups.last.last << step
+            else
+              groups << [nil, [step]]
+            end
+          end
+          groups.map { |command, events| MessageGroup.new(command:, events: events.freeze) }.freeze
+        end
+      end
 
       # The log position of its last message, 0 for none.
       def last_position = steps.last&.position || 0
