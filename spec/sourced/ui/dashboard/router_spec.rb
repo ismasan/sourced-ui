@@ -5,9 +5,13 @@ require 'rack/test'
 
 require 'sourced/ui/dashboard'
 require_relative '../../../support/spec_light'
+require_relative '../../../support/machine_helpers'
+require_relative '../../../support/spec_trip'
+require 'async'
 
 RSpec.describe Sourced::UI::Dashboard::App do
   include Rack::Test::Methods
+  include MachineHelpers
 
   def app
     Sourced::UI::Dashboard::App
@@ -44,6 +48,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
     Sourced.config.config!('workers.count') { 0 }
     Sourced.register(TestProjector)
     Sourced.register(SpecLight)
+    Sourced.register(SpecTrip)
     Sourced.register(RouterTestShop::Orders)
     Sourced.register(RouterTestShop::Carts)
     Sourced.start!
@@ -280,6 +285,150 @@ RSpec.describe Sourced::UI::Dashboard::App do
       expect(last_response.status).to eq(404)
       get '/reactors/spec_light/states/nope'
       expect(last_response.status).to eq(404)
+    end
+  end
+
+  describe 'GET /reactors/:group_id/instance' do
+    # A light installed, switched on and dimmed: each command, then what it
+    # appended, caused by it.
+    before(:all) do
+      keys = { light_id: 'lamp-1' }
+      [SpecLight::Install, SpecLight::Toggle, SpecLight::Dim].each { Sourced.handle!(SpecLight, it.new(payload: keys)) }
+      Sourced.store.append([SpecLight::Install.new(payload: { light_id: 'lamp-2' })])
+      @positions = Sourced.store.read_partition(keys, handled_types: %w[spec_light.runtime.off spec_light.runtime.on])
+                                .messages.to_h { [it.type.split('.').last, it.position] }
+    end
+
+    def instance_page(query, env = {})
+      get "/reactors/spec_light/instance?#{Rack::Utils.build_query(query)}", {}, env
+      last_response.body
+    end
+
+    it "offers a form for the machine's partition keys on its page" do
+      get '/reactors/spec_light'
+      expect(last_response.body).to include(
+        '<form method="get" action="http://example.org/reactors/spec_light/instance"',
+        'name="light_id" required'
+      )
+    end
+
+    it 'lights where the instance is at the latest, with its messages, and follows it' do
+      body = instance_page(light_id: 'lamp-1')
+      expect(last_response.status).to eq(200)
+      expect(body).to match(/is-active" id="sc-on"/)
+      expect(body).to include('Events (3)', '>→ off<', '>→ on<', '>dimmed<', 'The latest. Following.')
+      # Its commands aren't in the feed: they're in what it accepts.
+      expect(body[/<ol class="timeline">.*?<\/ol>/m]).not_to include('event-card command')
+      # A state change reads as where it went, not as its event's type.
+      expect(body).not_to include('>runtime.on<')
+      expect(body).not_to include('lamp-2')
+      # What it accepts there.
+      expect(body).to include('>Toggle<', '>Dim<', '>Break<')
+      expect(body[/Refuses.*?<\/ul>/m]).to include('>Install<')
+      expect(body).to include("/reactors/spec_light/instance/updates?light_id=lamp-1&after=")
+    end
+
+    it 'travels back to a message: the instance as it was once evolved up to it' do
+      body = instance_page(light_id: 'lamp-1', at: @positions['off'])
+      expect(body).to match(/is-active" id="sc-off"/)
+      expect(body).not_to match(/is-active" id="sc-on"/)
+      expect(body).to include("As of position #{@positions['off']}.", 'Back to latest', 'is-future')
+      expect(body).to match(/href="[^"]*at=#{@positions['off']}"[^>]*class="timeline__link" aria-current="true"/)
+      expect(body).not_to include('instance/updates')
+    end
+
+    it "marks a machine's state changes apart from its data events, in its feed and in the log" do
+      body = instance_page(light_id: 'lamp-1')
+      feed = body[/<ol class="timeline">.*?<\/ol>/m]
+      expect(feed).to match(/class="event-card state[^"]*">[^\n]*?>→ on</)
+      expect(feed).to match(/class="event-card event[^"]*">[^\n]*?>dimmed</)
+      # Each with the command it was appended for.
+      expect(feed).to match(/>dimmed<\/span><span class="feed-trigger"[^>]*>by <span class="feed-trigger__name">dim</)
+      expect(feed).to match(/>→ on<\/span><span class="feed-trigger"[^>]*>by <span class="feed-trigger__name">toggle</)
+      # The latest first, down to where it starts.
+      expect(feed.scan(/class="event-type">([^<]*)</).flatten).to eq(['dimmed', '→ on', '→ off', 'Start'])
+
+      get "/log/#{@positions['on']}"
+      expect(last_response.body).to include('class="event-card fade-in state"', 'class="event-card fade-in command"')
+    end
+
+    it 'steps to the older and newer event with arrows, disabled where there are none' do
+      nav = ->(body) { body[%r{<span class="pagination feed-nav">.*?</span>}m].scan(/<button[^>]*>/) }
+
+      older, newer = nav.(instance_page(light_id: 'lamp-1'))
+      expect(older).to include("at=#{@positions['on']}") # dimmed is latest; on is before it
+      expect(newer).to include('disabled')
+
+      older, newer = nav.(instance_page(light_id: 'lamp-1', at: @positions['off']))
+      expect(older).to include('at=0')
+      expect(newer).to include("at=#{@positions['on']}")
+
+      older, newer = nav.(instance_page(light_id: 'lamp-1', at: 0))
+      expect(older).to include('disabled')
+      expect(newer).to include("at=#{@positions['off']}")
+    end
+
+    it 'travels back to before its first message' do
+      body = instance_page(light_id: 'lamp-1', at: 0)
+      expect(body).to include('Before its first message.', 'its initial position')
+      expect(body).not_to match(/is-active" id="sc-(on|off)"/)
+    end
+
+    it "patches the page in over Datastar, pushing the instance's URL with only its partition values" do
+      body = instance_page({ light_id: 'lamp-1', at: @positions['on'], datastar: '{"modal":false}' },
+                           'HTTP_ACCEPT' => 'text/event-stream')
+      expect(body).to include('event: datastar-patch-elements', 'id="reactor"')
+      pushed = body[/history\.pushState\([^\n]*/]
+      expect(pushed).to include(%("http://example.org/reactors/spec_light/instance?light_id=lamp-1&at=#{@positions['on']}"))
+      expect(pushed).not_to include('datastar=')
+    end
+
+    it 'shows a partition with no messages where the machine starts' do
+      body = instance_page(light_id: 'nope')
+      expect(last_response.status).to eq(200)
+      expect(body).to include('Events (0)', 'No messages yet')
+    end
+
+    it 'draws an instance of a machine with nested and parallel states' do
+      keys = { trip_id: 'trip-1' }
+      commands = [SpecTrip::Start, SpecTrip::ChooseFlight].map { it.new(payload: keys) }
+      started, chosen = decided(SpecTrip, keys, *commands)
+      Sourced.store.append([commands[0], *started, commands[1], *chosen].compact)
+
+      get '/reactors/spec_trip/instance?trip_id=trip-1'
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to match(/statechart__node--parallel is-active" id="sc-planning"/)
+      expect(last_response.body).to include('planning.flight.flight_chosen')
+    end
+
+    # Its body streams for as long as the browser follows, in an Async
+    # reactor (Sidereal streams with Datastar::AsyncExecutor): read its
+    # first patch off the socket, then hang up.
+    it 'follows the instance: patches it in as messages arrive after the position it was rendered at' do
+      env = Rack::MockRequest.env_for('/reactors/spec_light/instance/updates?light_id=lamp-1&after=0',
+                                      'HTTP_ACCEPT' => 'text/event-stream')
+      status, _headers, body = app.call(env)
+      expect(status).to eq(200)
+
+      chunk = +''
+      Sync do |task|
+        reader, writer = IO.pipe
+        streaming = task.async { body.call(writer) }
+        task.with_timeout(5) { chunk << reader.readpartial(65_536) until chunk.include?('</aside>') }
+      ensure
+        streaming&.stop
+        [reader, writer].each { it&.close unless it&.closed? }
+      end
+      expect(chunk).to include('event: datastar-patch-elements', 'id="machine-instance"', 'Events (3)')
+    end
+
+    it "refuses missing partition values, and reactors that aren't machines" do
+      instance_page({})
+      expect(last_response.status).to eq(400)
+      get '/reactors/test_projector/instance?thing_id=t1'
+      expect(last_response.status).to eq(404)
+      get '/reactors/spec_light/instance/updates'
+      expect(last_response.status).to eq(400)
     end
   end
 

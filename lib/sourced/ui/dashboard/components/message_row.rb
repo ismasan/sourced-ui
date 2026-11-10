@@ -8,6 +8,17 @@ module Sourced
     module Dashboard
       module Components
         class MessageRow < Component
+          # How an event card styles a message: a command, a machine's state
+          # change (one of its Sourced::Machine::State events), or any other
+          # event, which for a machine is data it appends without moving.
+          def self.kind(message)
+            case message
+            when Sourced::Command then 'command'
+            when Sourced::Machine::State then 'state'
+            else 'event'
+            end
+          end
+
           def initialize(message, href: nil, highlighted: false)
             @message = message
             @href = href
@@ -16,7 +27,7 @@ module Sourced
             @classes = [
               'event-card',
               'fade-in',
-              (@is_command ? 'command' : 'event'),
+              self.class.kind(message),
               ('highlighted' if @highlighted)
             ]
           end

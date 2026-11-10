@@ -930,7 +930,19 @@ h2 {
 
   .event-type {
     background-color: #fbe4be;
+    color: #774a18;
     a { color: #774a18; }
+  }
+}
+
+/* A machine's state change: lit as its states are on the statechart */
+.event-card.state {
+  border-left-color: var(--teal-600);
+
+  .event-type {
+    background-color: var(--teal-50);
+    color: var(--teal-700);
+    a { color: var(--teal-700); }
   }
 }
 
@@ -1383,12 +1395,11 @@ dl.prop-table {
   align-items: start;
 }
 
+/* In the page's flow, however long: no scroller of its own. Its column
+   may narrow its panels, which truncate what doesn't fit. */
 .reactor__aside {
-  position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
 
@@ -1624,8 +1635,8 @@ dl.prop-table {
   background-size: 16px 16px;
 
   .statechart { min-width: calc(var(--sc-w) * 0.8); }
-  .statechart__node { cursor: pointer; }
-  .statechart__node:hover > .statechart__box { stroke: var(--teal-600); }
+  &:not(.chart-card__canvas--instance) .statechart__node { cursor: pointer; }
+  &:not(.chart-card__canvas--instance) .statechart__node:hover > .statechart__box { stroke: var(--teal-600); }
 }
 .chart-card__legend {
   border-top: 1px solid var(--slate-200);
@@ -1889,10 +1900,99 @@ dl.prop-table {
 @media (max-width: 1000px) {
   .reactor { padding: 1rem; }
   .reactor__layout { grid-template-columns: minmax(0, 1fr); }
-  .reactor__aside { position: static; max-height: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .statechart__box { transition: none; }
   .switch__track, .switch__track::after { transition: none; }
 }
+
+/* Opening a machine instance, from the machine's page */
+.instance-form {
+  display: grid;
+  gap: 0.6rem;
+
+  .btn { justify-self: start; }
+}
+.instance-form__field {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--slate-500);
+
+  span { font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace; }
+  input {
+    font: inherit;
+    font-weight: 400;
+    font-size: 13px;
+    color: var(--slate-800);
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--slate-300);
+    border-radius: 6px;
+    background: white;
+  }
+  input:focus { outline: 2px solid var(--teal-400); outline-offset: 0; border-color: var(--teal-600); }
+}
+
+.json-block {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  background: var(--slate-50);
+  border: 1px solid var(--slate-100);
+  font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace;
+  font-size: 12px;
+  color: var(--slate-700);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+
+/* The dashboard's event cards (.event-card), as links to travel between */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  .event-card { margin-bottom: 4px; padding: 0; }
+  .event-card.start { border-left-color: var(--slate-200); }
+  .event-card.start .event-type { background: none; color: var(--slate-400); font-style: italic; font-weight: 500; }
+  .event-card.is-future { opacity: 0.45; }
+  .event-card.is-future:hover { opacity: 0.8; }
+}
+.timeline__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 6px 10px;
+  color: inherit;
+  text-decoration: none;
+
+  .event-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .event-type { flex: 0 1 auto; }
+  .event-timestamp { flex: none; margin: 0 0 0 auto; padding-left: 0.5em; font-variant-numeric: tabular-nums; }
+}
+/* The command it was appended for, on a line of its own under its type */
+.feed-trigger {
+  order: 1;
+  flex-basis: 100%;
+  min-width: 0;
+  padding-left: calc(2.5ch + 8px + 0.5em);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--slate-400);
+}
+.feed-trigger__name { color: #1976d2; font-weight: 500; }
+.feed-nav {
+  margin: 0 0 0 auto;
+  gap: 0.25rem;
+  align-self: center;
+
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:disabled:hover { background: var(--slate-50); border-color: var(--slate-300); }
+}
+.feed-nav + .panel__link { margin-left: 0.5rem; }
