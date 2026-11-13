@@ -7,6 +7,7 @@ require 'sourced/ui/dashboard'
 require_relative '../../../support/spec_light'
 require_relative '../../../support/machine_helpers'
 require_relative '../../../support/spec_trip'
+require_relative '../../../support/spec_alarm'
 require 'async'
 
 RSpec.describe Sourced::UI::Dashboard::App do
@@ -49,6 +50,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
     Sourced.register(TestProjector)
     Sourced.register(SpecLight)
     Sourced.register(SpecTrip)
+    Sourced.register(SpecAlarm)
     Sourced.register(RouterTestShop::Orders)
     Sourced.register(RouterTestShop::Carts)
     Sourced.start!
@@ -97,6 +99,21 @@ RSpec.describe Sourced::UI::Dashboard::App do
       get '/log'
       expect(last_response.status).to eq(200)
       expect(last_response.content_type).to include('text/html')
+    end
+
+    it "filters by a message type's attribute values, ignoring filters without any" do
+      t1 = Sourced.store.read_all(Sourced::Selector[RouterTestEvent].by(thing_id: 't1')).messages
+      t2 = RouterTestEvent.new(payload: { thing_id: 't2' })
+      Sourced.store.append([t2])
+
+      filters = {
+        '0' => { 'type' => 'router_test.event', 'attributes' => { 'thing_id' => 't2' } },
+        '1' => { 'type' => 'spec_light.install', 'attributes' => { 'light_id' => '' } }
+      }
+      get '/log', filters: filters
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include(%(id="#{t2.id}"))
+      t1.each { expect(last_response.body).not_to include(%(id="#{it.id}")) }
     end
   end
 
@@ -262,14 +279,25 @@ RSpec.describe Sourced::UI::Dashboard::App do
       expect(body).not_to match(/is-active" id="sc-/)
     end
 
+    it 'draws a machine with entry and exit actions, and a timer whose delay it computes' do
+      get '/reactors/spec_alarm'
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include('>⏱ computed / SendSOS<')
+
+      get '/reactors/spec_alarm/states/armed'
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include('⏱ computed after entering it, a timer dispatches SendSOS.')
+    end
+
     it 'lights a picked state, with what it accepts and refuses' do
       get '/reactors/spec_light/states/on'
       expect(last_response.status).to eq(200)
       body = last_response.body
       expect(body).to match(/is-active" id="sc-on"/)
       expect(body).to include('Accepts', 'Refuses', '>Install<')
-      # What it takes there, as an event model: Dim appends Dimmed and stays.
-      expect(body).to include('class="event-model"', '>Dimmed<', '>stays<')
+      # What it takes there, as an event model: Dim stays. (Its data event,
+      # Dimmed, isn't in Sourced.topology: handlers don't declare data events.)
+      expect(body).to include('class="event-model"', '>Dim<', '>stays<')
     end
 
     it "streams updates to the reactor's consumer group card" do
@@ -295,8 +323,8 @@ RSpec.describe Sourced::UI::Dashboard::App do
       keys = { light_id: 'lamp-1' }
       [SpecLight::Install, SpecLight::Toggle, SpecLight::Dim].each { Sourced.handle!(SpecLight, it.new(payload: keys)) }
       Sourced.store.append([SpecLight::Install.new(payload: { light_id: 'lamp-2' })])
-      types = Sourced::UI::MachineTimeline.message_types(SpecLight)
-      @positions = Sourced.store.read_partition(keys, handled_types: types).messages.to_h { [it.type.split('.').last, it.position] }
+      selector = Sourced::UI::MachineTimeline.selector(SpecLight, keys)
+      @positions = Sourced.store.read(selector).messages.to_h { [it.type.split('.').last, it.position] }
     end
 
     def instance_page(query, env = {})

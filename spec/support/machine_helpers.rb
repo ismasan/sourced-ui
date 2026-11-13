@@ -9,7 +9,7 @@ module MachineHelpers
       instance.evolve(history)
       raise ArgumentError, "#{machine} doesn't take #{command.class} here" unless instance.handles_command?(command)
 
-      read = Sourced::ReadResult.new(messages: history, guard: Sourced::ConsistencyGuard.new(query: [], last_position: 0))
+      read = Sourced::ReadResult.new(messages: history, guard: Sourced::ConsistencyGuard.new(selector: Sourced::Selector::NONE, last_position: 0))
       history + machine.handle_batch(keys, [command], history: read, replaying: false).flat_map do |actions, _|
         Array(actions).select { Sourced::Actions::Append === it }.flat_map(&:messages)
       end

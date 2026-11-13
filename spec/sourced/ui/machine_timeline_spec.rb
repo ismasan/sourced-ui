@@ -20,7 +20,7 @@ RSpec.describe Sourced::UI::MachineTimeline do
   subject(:timeline) { described_class.new(SpecLight, keys, messages) }
 
   it "reads the types the machine handles, evolves from and defines, its own events too" do
-    expect(described_class.message_types(SpecLight)).to include(
+    expect(described_class.message_types(SpecLight).map(&:type)).to include(
       'spec_light.install', 'spec_light.dim', 'spec_light.runtime.on', 'spec_light.dimmed'
     )
   end

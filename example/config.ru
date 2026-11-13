@@ -1,9 +1,9 @@
 require_relative 'domain'
 
-require 'sourced/ui/dashboard'
-require 'datastar/async_executor'
+# Workers run in the server, deciding what the dashboard shows as it happens.
+Sourced.start!
 
-Datastar.config.executor = Datastar::AsyncExecutor.new
+require 'sourced/ui/dashboard'
 
 # --- Dev reloader ---
 # Reloads changed sourced-ui lib files on each request.

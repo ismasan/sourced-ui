@@ -23,11 +23,15 @@ module Sourced
       # A timer's delay as declared: seconds, or a duration ('15m', 'P30D').
       def delay_label(delay) = Numeric === delay ? "#{delay.to_i}s" : delay.to_s
 
+      # A chart timer's delay: as declared, or for one the context computes,
+      # what computes it (its class's name, or 'computed').
+      def timer_delay(timer) = timer[:delay] || timer[:computed]
+
       # command type => its label, for every command the machine takes.
       def command_labels(chart) = commands(chart).to_h { [it[:event], it[:label]] }
 
       # A state's timers, their commands labelled from +labels+ (command_labels).
-      def timers(node, labels) = node[:after].map { |t| Timer.new(delay: t[:delay], commands: t[:dispatches].map { labels.fetch(it) }) }
+      def timers(node, labels) = node[:after].map { |t| Timer.new(delay: timer_delay(t), commands: t[:dispatches].map { labels.fetch(it) }) }
 
       # As Components::Statechart ids its states (+sc-<dom id>+).
       def dom_id(path) = path.to_s.gsub(/[^A-Za-z0-9_-]/, '-')

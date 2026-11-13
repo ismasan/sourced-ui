@@ -114,8 +114,7 @@ module Sourced
         get '/log' do
           from = (request.params['from'] || 1).to_i
           filters = parse_filter_params(request.params)
-          conditions = filters_to_conditions(filters)
-          messages = store.read_all(from_position: from, conditions: conditions, limit: per_page)
+          messages = store.read_all(filters_to_selector(filters), from_position: from, limit: per_page)
           component Components::MessagePage.new(position: from, messages:, filters: filters)
         end
 
@@ -198,13 +197,13 @@ module Sourced
         get '/reactors/:group_id/instance/updates' do |group_id:|
           machine = find_machine(group_id)
           values = partition_values(machine)
-          types = MachineTimeline.message_types(machine)
+          selector = MachineTimeline.selector(machine, values)
           last = request.params['after'].to_i
 
           datastar.stream do |sse|
             while true
               sleep 0.5
-              next if store.read_partition(values, handled_types: types, after_position: last).messages.empty?
+              next if store.read(selector, after_position: last).messages.empty?
 
               timeline = MachineTimeline.load(machine, values, store:)
               last = timeline.last_position
@@ -301,13 +300,20 @@ module Sourced
           }
         end
 
-        def filters_to_conditions(filters)
+        # What the filters select, nil for all: each filter, its type's
+        # messages with the attribute values given (those it declares), and
+        # either filter's. A filter without values selects nothing more.
+        #
+        # @return [Sourced::Selector, nil]
+        def filters_to_selector(filters)
           parsed = Sourced::UI::Components::Types::Filters.parse(filters)
-          parsed.flat_map { |entry|
-            attrs = entry[:attributes].reject { |_, v| v.nil? || v.empty? }
-            next [] if attrs.empty?
-            entry[:type].to_conditions(**attrs.transform_keys(&:to_sym))
-          }
+          parsed.filter_map { |entry|
+            type = entry[:type]
+            declared = type.payload_attribute_names
+            values = entry[:attributes].to_h { |key, value| [key.to_sym, value] }
+              .select { |key, value| declared.include?(key) && !value.to_s.empty? }
+            Sourced::Selector[type].by(**values) unless values.empty?
+          }.reduce(:+)
         end
       end
 

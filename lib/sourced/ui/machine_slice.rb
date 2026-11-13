@@ -15,11 +15,12 @@ module Sourced
     # own event, after what appends it elsewhere in the machine (Suspend, from
     # active, before Suspended), shown but not followed.
     #
-    # A command keeps the data events it appends, and only the state changes it
-    # can make from this state (the chart's targets for it here), each an event
-    # like any other. One that may leave the machine where it is (a data-only
-    # command, or one that may not move) is tagged +stays+: staying appends no
-    # state event to draw.
+    # A command keeps only the state changes it can make from this state (the
+    # chart's targets for it here), each an event like any other. Its data
+    # events aren't drawn: Sourced.topology leaves a machine's data events out,
+    # as its handlers don't declare them. One that may leave the machine where
+    # it is (a data-only command, or one that may not move) is tagged +stays+:
+    # staying appends no state event to draw.
     module MachineSlice
       extend self
 

@@ -242,7 +242,7 @@ module Sourced
         # A transition its own state's timer fires says so: `⏱ 15m / Expire`.
         def timed_label(state, transition)
           label = transition_label(transition)
-          delays = state[:after].select { it[:dispatches].include?(transition[:event]) }.map { MachineChart.delay_label(it[:delay]) }
+          delays = state[:after].select { it[:dispatches].include?(transition[:event]) }.map { MachineChart.delay_label(MachineChart.timer_delay(it)) }
           delays.any? ? "⏱ #{delays.join(', ')} / #{label}" : label
         end
 
@@ -251,7 +251,7 @@ module Sourced
         def timer_badge(state)
           untaken = state[:after].filter_map do |timer|
             rest = timer[:dispatches].reject { state[:on].key?(it) }
-            MachineChart::Timer.new(delay: timer[:delay], commands: rest.map { @command_labels.fetch(it) }).label if rest.any?
+            MachineChart::Timer.new(delay: MachineChart.timer_delay(timer), commands: rest.map { @command_labels.fetch(it) }).label if rest.any?
           end
           untaken.any? ? "⏱ #{untaken.join(', ')}" : nil
         end

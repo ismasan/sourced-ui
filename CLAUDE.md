@@ -59,6 +59,6 @@ bundle exec rake install
 ## Conventions
 
 - All files use `# frozen_string_literal: true`
-- Ruby >= 3.1 required (uses pattern matching, Data.define, endless methods)
+- Ruby >= 4.0.1 required (uses pattern matching, Data.define, endless methods)
 - Event objects have `id`, `causation_id`, `correlation_id`, `seq` attributes (from `Sourced::Message`)
 - Commands use `Sourced::Command` with `valid?` and `errors[:payload]` for validation

@@ -4,6 +4,7 @@ require 'spec_helper'
 require 'nokogiri'
 require 'sourced/ui/components'
 require_relative '../../../support/spec_trip'
+require_relative '../../../support/spec_alarm'
 require_relative '../../../support/machine_helpers'
 
 RSpec.describe Sourced::UI::Components::Statechart do
@@ -93,6 +94,19 @@ RSpec.describe Sourced::UI::Components::Statechart do
 
     it "go on the state when another state takes their commands" do
       expect(svg).to match(%r{class="statechart__timer"[^>]*>⏱ 2h / Reset</text>})
+    end
+  end
+
+  describe 'a machine with actions and a computed timer' do
+    let(:alarm) { SpecAlarm }
+
+    it 'labels the timer by what computes its delay' do
+      expect(render(alarm.to_h)).to include('>⏱ computed / SendSOS<')
+    end
+
+    it "slices a state with actions from the machine's topology" do
+      slice = Sourced::UI::MachineSlice.build(alarm, 'armed', Sourced::Topology.build([alarm]))
+      expect(slice.nodes.map(&:name)).to include('SpecAlarm::Armed', 'SpecAlarm::Disarm')
     end
   end
 

@@ -208,6 +208,23 @@ The styles for both components are in the dashboard's stylesheet, `lib/sourced/u
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
 
+### Running the example app
+
+`example/` is a small task app with the dashboard mounted, for trying the UI in a browser. It has a decider and a projector for tasks, and a `Sourced::Machine`, `TaskApp::TaskReview`, for the machine pages. The machine reviews a task's code and docs in parallel regions, with an entry action, a timer and data events.
+
+```bash
+cd example
+bundle install
+TASK_COUNT=50 bundle exec ruby seed.rb   # optional: seed sample tasks (default 1000)
+bundle exec falcon serve -b http://localhost:9292 -n 1
+```
+
+Then open http://localhost:9292. The seed reviews half the tasks, stopping each review at a different point, and prints a link to one review instance for each of those points.
+
+- The app reads from and writes to the SQLite file `example/storage/tasks.db`. Set `DB_PATH` to use another file. Sourced creates its tables on start, but doesn't migrate a database created by an older Sourced, so delete the file to start over.
+- `example/Gemfile` loads `sourced` from a local checkout (edit its path to yours, or switch to the commented-out GitHub line) and `sourced-ui` from this repo.
+- When a request comes in, the app reloads any changed files in the dashboard's components and `app.rb`: refresh the page to see an edit. Changes to `example/domain.rb` need a server restart.
+
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
 ## Contributing

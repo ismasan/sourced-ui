@@ -26,18 +26,30 @@ module Sourced
       # @param store [Sourced::Store]
       # @return [MachineTimeline]
       def self.load(machine, values, store: Sourced.store)
-        new(machine, values, store.read_partition(values, handled_types: message_types(machine)).messages)
+        new(machine, values, store.read(selector(machine, values)).messages)
+      end
+
+      # What the timeline reads: the machine's {.message_types} in the
+      # partition +values+ name. What it evolves from, as Sourced.load reads
+      # it (a source's parts keep keys of their own); the rest by the
+      # machine's partition keys.
+      #
+      # @return [Sourced::Selector] bound to +values+
+      def self.selector(machine, values)
+        rest = message_types(machine) - evolve_types(machine)
+        machine.history_for(values) +
+          Sourced::Selector[*rest].by(*machine.partition_keys).bind(**values)
       end
 
       # The types read into the timeline: those the machine handles and
       # evolves from, and those it defines (the events its handlers append
       # without moving it). Messages of any other type aren't the machine's.
       #
-      # @return [Array<String>]
+      # @return [Array<Class<Sourced::Message>>]
       def self.message_types(machine)
         own = "#{machine.message_prefix}."
-        defined = Sourced::Message.registry.all.map(&:type).select { it.start_with?(own) }
-        (machine.handled_messages + machine.handled_messages_for_evolve).map(&:type) | defined
+        defined = Sourced::Message.registry.all.select { it.type.start_with?(own) }
+        (machine.handled_messages + evolve_types(machine)) | defined
       end
 
       # A command in the partition and the steps of what it appended (those
@@ -48,13 +60,18 @@ module Sourced
         def position = steps.first.position
       end
 
+      # The types the machine evolves from.
+      #
+      # @return [Array<Class<Sourced::Message>>]
+      def self.evolve_types(machine) = machine.evolve_selector.types
+
       attr_reader :machine, :values, :steps
 
       # @param messages [Array<Sourced::PositionedMessage>] the partition's, in log order
       def initialize(machine, values, messages)
         @machine = machine
         @values = values
-        @evolvable = machine.handled_messages_for_evolve.to_set
+        @evolvable = self.class.evolve_types(machine).to_set
         instance = machine.new(values)
         before = instance.machine.paths
         @steps = messages.map do |message|
