@@ -396,13 +396,16 @@ module Sourced
                                   starts: Array(transition[:starts]))
               else
                 transition[:targets].each do |target|
-                  to, label = @histories.key?(target) ? [@histories[target], "#{label} (#{history_mark(target)})"] : [target, label]
-                  edges << Edge.new(from: state[:id], to: reentry(state[:id], to), label:, kind: live ? :live : :command,
+                  to, label = resolve(state[:id], target, label)
+                  edges << Edge.new(from: state[:id], to:, label:, kind: live ? :live : :command,
                                     starts: Array(transition[:starts]))
                 end
               end
             end
-            eventless(state).each { |label, target| edges << Edge.new(from: state[:id], to: target, label:, kind: :done) }
+            eventless(state).each do |label, target|
+              to, label = resolve(state[:id], target, label)
+              edges << Edge.new(from: state[:id], to:, label:, kind: :done)
+            end
             case state[:type]
             in 'parallel' then regions_of(state).each { |child| collect_edges(child, edges) }
             in 'compound' then collect_edges(state, edges)
@@ -425,7 +428,18 @@ module Sourced
         end
 
         def escalation_edges
-          @escalations.map { |from, to| Edge.new(from:, to:, label: 'on_final', kind: :done) }
+          @escalations.map do |from, target|
+            to, label = resolve(from, target, 'on_final')
+            Edge.new(from:, to:, label:, kind: :done)
+          end
+        end
+
+        # Where an arrow from +from+ to +target+ is drawn, and its label: a
+        # history node's goes to its checkpoint, marked (H) or (H*); a target
+        # containing +from+ is re-entered (see #reentry).
+        def resolve(from, target, label)
+          to, label = @histories.key?(target) ? [@histories[target], "#{label} (#{history_mark(target)})"] : [target, label]
+          [reentry(from, to), label]
         end
 
         # A parallel checkpoint's regions. Its history node, if anything targets

@@ -5,6 +5,7 @@ require 'nokogiri'
 require 'sourced/ui/components'
 require_relative '../../../support/spec_trip'
 require_relative '../../../support/spec_alarm'
+require_relative '../../../support/spec_review'
 require_relative '../../../support/machine_helpers'
 
 RSpec.describe Sourced::UI::Components::Statechart do
@@ -137,6 +138,15 @@ RSpec.describe Sourced::UI::Components::Statechart do
     dot = svg.at_xpath('//g[@id="sc-p-r-initial"]/circle')
     *, x, y = reset.at_xpath('path')['d'].scan(/-?[\d.]+/).map(&:to_f)
     expect(Math.hypot(x - dot['cx'].to_f, y - dot['cy'].to_f)).to be <= dot['r'].to_f + 0.5
+  end
+
+  # A part escalating into a parallel checkpoint's history (see SpecReview).
+  it "draws a part's on_final escalation to a history target at its checkpoint" do
+    svg = Nokogiri::XML(render(SpecReview.to_h))
+    svg.remove_namespaces!
+    escalation = svg.xpath('//g[@data-from="scanning.scanned"]')
+    expect(escalation.map { it['data-to'] }.uniq).to eq(['reviewing'])
+    expect(escalation.text).to include('on_final (H)')
   end
 end
 
