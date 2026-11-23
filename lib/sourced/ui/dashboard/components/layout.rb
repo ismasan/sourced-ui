@@ -8,13 +8,14 @@ module Sourced
       module Components
         class Layout < Sidereal::Components::Layout
           # The dashboard is component-based and has no real page, but the
-          # parent Layout reads `page.page_signals` and `page.channel_name`
+          # parent Layout reads `page.page_signals` and `page.channel_names`
           # from whatever it wraps. NullPage satisfies Sidereal::Page's type
           # contract while supplying the dashboard's defaults: a `modal`
-          # signal and no per-page SSE channel.
+          # signal and no channels, so the layout opens no page stream
+          # (the dashboard streams its own updates per component).
           class NullPage < Sidereal::Page
             def page_signals = { modal: false }
-            def channel_name = nil
+            def channel_names = []
           end
 
           NULL_PAGE = NullPage.new
@@ -67,6 +68,13 @@ module Sourced
           private
 
           def helpers = context
+
+          # The dashboard's SSE routes stream their own updates, so it never
+          # opens a page stream. Answering nil here, instead of letting
+          # Sidereal::Page.stream_token find NULL_PAGE has no channels, keeps
+          # the dashboard rendering where Sidereal isn't booted, since that
+          # reads Sidereal.signer before checking the page's channels.
+          def updates_url = nil
         end
       end
     end

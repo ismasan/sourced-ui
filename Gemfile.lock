@@ -8,31 +8,33 @@ GIT
 
 GIT
   remote: https://github.com/ismasan/sidereal.git
-  revision: d0c3d4e4905c783cd05c66465f8a0a509f50f07b
+  revision: 5b4f5c2d3c7c009863ec06677122b7073aea6fad
   specs:
     sidereal (0.1.0)
       async
+      base64
       brotli
       datastar (~> 1.0.6)
       phlex
-      plumb (~> 0.4)
+      plumb (~> 0.4, >= 0.4.1)
       rack (~> 3)
       rack-session
-      sourced-component (~> 0.1)
+      samovar
+      sourced-component (~> 0.1, >= 0.1.5)
       sourced-message (>= 0.4.0)
       tsort
 
 GIT
   remote: https://github.com/ismasan/sourced.git
-  revision: f8b61496285b063ff07457731fcdc1eae19bc518
+  revision: 2d77dcd051f469ad929159b8ca67469100464aaa
   specs:
     sourced (0.0.1)
       async
-      plumb (= 0.4.0)
+      plumb (>= 0.4.1)
       sequel
-      sourced-component (~> 0.1, >= 0.1.1)
-      sourced-message (>= 0.5.3)
-      sqlite3
+      sourced-component (~> 0.1, >= 0.1.5)
+      sourced-message (>= 0.5.4)
+      sqlite3 (>= 2.10.2)
 
 PATH
   remote: .
@@ -52,7 +54,7 @@ GEM
       io-event (~> 1.21)
     base64 (0.3.0)
     bigdecimal (4.1.3)
-    brotli (0.8.0)
+    brotli (0.9.3)
     concurrent-ruby (1.3.8)
     console (1.38.0)
       fiber-annotation
@@ -108,23 +110,23 @@ GEM
     phlex (2.4.1)
       refract (~> 1.0)
       zeitwerk (~> 2.7)
-    plumb (0.4.0)
+    plumb (0.4.1)
       bigdecimal
       concurrent-ruby
     pp (0.6.4)
       prettyprint
     prettyprint (0.2.1)
-    prism (2.0.0-aarch64-linux-gnu)
-    prism (2.0.0-aarch64-linux-musl)
-    prism (2.0.0-arm-linux-gnu)
-    prism (2.0.0-arm-linux-musl)
-    prism (2.0.0-arm64-darwin)
-    prism (2.0.0-x86_64-darwin)
-    prism (2.0.0-x86_64-linux-gnu)
-    prism (2.0.0-x86_64-linux-musl)
+    prism (2.1.0-aarch64-linux-gnu)
+    prism (2.1.0-aarch64-linux-musl)
+    prism (2.1.0-arm-linux-gnu)
+    prism (2.1.0-arm-linux-musl)
+    prism (2.1.0-arm64-darwin)
+    prism (2.1.0-x86_64-darwin)
+    prism (2.1.0-x86_64-linux-gnu)
+    prism (2.1.0-x86_64-linux-musl)
     raabro (1.5.0)
     racc (1.8.1)
-    rack (3.2.7)
+    rack (3.2.9)
     rack-session (2.1.2)
       base64 (>= 0.1.0)
       rack (>= 3.0.0)
@@ -140,7 +142,7 @@ GEM
       prism (>= 1.6.0)
       rbs (>= 4.0.0)
       tsort
-    refract (1.1.0)
+    refract (1.2.0)
       prism
       zeitwerk
     reline (0.7.0)
@@ -159,13 +161,15 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.13.0)
     rspec-support (3.13.7)
+    samovar (2.5.1)
+      console (~> 1.0)
     sequel (5.110.0)
       bigdecimal
-    sourced-component (0.1.1)
+    sourced-component (0.1.5)
       plumb (~> 0.4)
       sourced-message
       tsort (~> 0.2)
-    sourced-message (0.5.3)
+    sourced-message (0.5.4)
       fugit
       plumb (>= 0.4)
     sqlite3 (2.10.2-aarch64-linux-gnu)
@@ -208,7 +212,7 @@ CHECKSUMS
   async (2.46.0) sha256=34f984733dbf63a997376346451ec995e858cacc3105e86ccfeaf8877b4f490b
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   bigdecimal (4.1.3) sha256=61ebe1e5e559bdc3cc6f2c0ee7f427321fc838f59611c294356eb04d6e21cf66
-  brotli (0.8.0) sha256=0c5a42046b3b603fb109656881147fd76064c034b7d19c1b4fcc32a093a4d55d
+  brotli (0.9.3) sha256=645eb1ebb7b3776ed4f794f636cc21ab0a0923f6f8e87eff2b111e70bbe02607
   bundler (4.0.21) sha256=7cbf5499b426076aa16c8d28a59e4c2c3aad5a438402abcd961f0119f29f1dd0
   concurrent-ruby (1.3.8) sha256=b2f1be836e968ccc78ccfce277ea79c72a88633f22306782c16ff23fb415d1e1
   console (1.38.0) sha256=35b82f59130e95e9be6b832d9e539c8b3988fc192e4a8e9a86ab4922f44ad5de
@@ -238,26 +242,26 @@ CHECKSUMS
   nokogiri (1.19.4-x86_64-linux-gnu) sha256=379fae440b28915e3f19d752ce2dcf8465ed2b2fbefd2a7ca0dd497bc981a06a
   nokogiri (1.19.4-x86_64-linux-musl) sha256=17dfb7c1fa194ae02fbf7c51a7afc8d278045ab3fdacfd86f91d02d7b274470b
   phlex (2.4.1) sha256=e596717fbfe38b5271840266758779ebe75092e02629f0c170287e6290a70b12
-  plumb (0.4.0) sha256=10c256a6f98363fd535ebe812123f3555e0a557035435f3b9b43cd5fb3d87f72
+  plumb (0.4.1) sha256=b29badb4fea2076c428e80952cf6e16b5a1031134790253e733ea724b0950bdd
   pp (0.6.4) sha256=dfcb0fce700c41456265922884f9fe195d7fbb0674a3578e6c0f69588e82b570
   prettyprint (0.2.1) sha256=d555d57ea6d7cf001d4774b693546a6bd88bec1e778ddffb5c60b68ceec4b7d4
-  prism (2.0.0-aarch64-linux-gnu) sha256=7df16d47ce2b1f771eaf63137213d84e98495e3f325043bcc09202d7e5730900
-  prism (2.0.0-aarch64-linux-musl) sha256=3140d10be2ea36122af23c1b8af946ca2f09c8f9e7b13f11d77ae13fe68e2681
-  prism (2.0.0-arm-linux-gnu) sha256=2712f462524a202f98c1fd0a59a609fa94937aa53347371726f72a7a8309a13c
-  prism (2.0.0-arm-linux-musl) sha256=d4fb8f775bf940230d5d0057886dac6437b99a6b77395dbe24b154bdfa66f5e9
-  prism (2.0.0-arm64-darwin) sha256=edebbfcc16f6a879f47dac9501b20a7cd95abe96397bb485106d6670541abeb1
-  prism (2.0.0-x86_64-darwin) sha256=9600064b7637a867bdb788dd45d5f5366d4acff2d0884cfe936463d7ab4a250d
-  prism (2.0.0-x86_64-linux-gnu) sha256=e0b4830c94d9dc59e80ad34d98096797f514c9e097b677c4947d89598c7f5cd1
-  prism (2.0.0-x86_64-linux-musl) sha256=69a76ee43c2a671dca88d97658a619b1bd4ec743dd903ccded70fd8f7897eec5
+  prism (2.1.0-aarch64-linux-gnu) sha256=808dddc72def68e1a0463689414c97e0ba211938eddbab05387a4844aa2b3ec2
+  prism (2.1.0-aarch64-linux-musl) sha256=dd1a0732620c1e575dabb07a297a62911fabd72f8e20ce850b522a866f877930
+  prism (2.1.0-arm-linux-gnu) sha256=96b2426b9dbab05448c4add735619929042be3cd7e871ff186468121b62bcfa8
+  prism (2.1.0-arm-linux-musl) sha256=00ef918e42a3dc98f11a461bf473586a3424b0f78bee8a4e43b5a65a5f5e2cd0
+  prism (2.1.0-arm64-darwin) sha256=2d0c2e3e011cfd89c041940907d3ff3def379d7b0f2ba158d1d42238e8ad8afc
+  prism (2.1.0-x86_64-darwin) sha256=6c645d8e6afc742956c7518220ce5106367727c4d9980ac9ab386d55004ddab4
+  prism (2.1.0-x86_64-linux-gnu) sha256=b2b647afce09551e650b8bb3e2fc91d7d73d392a09534ca307ec0d619c33bfd4
+  prism (2.1.0-x86_64-linux-musl) sha256=249f45981726923e259b927902246219fa25ad10a76f43849c9aee1a3d3ec5b8
   raabro (1.5.0) sha256=3f998a7bc84f9c84df3ab580634d2e0a5bda4f0841168d56035f529c9877440a
   racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
-  rack (3.2.7) sha256=93e13e1c24f93556671d85d2d79fa228c3485815c50d7e2f265b5330c6528fb7
+  rack (3.2.9) sha256=8235c1d08f0c461bedcff4413bbeba888173e5b09e1332ae951c98f0ee460dcc
   rack-session (2.1.2) sha256=595434f8c0c3473ae7d7ac56ecda6cc6dfd9d37c0b2b5255330aa1576967ffe8
   rack-test (2.3.0) sha256=b118d177cc002c572fc1b6fd8d19c9ed5881a36e8d6f689f9e618f9f861241e8
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
   rbs (4.2.0) sha256=51f7b886dcc05bc09e10b901daa6a81829f6adc03101d6ca9ea4aac6103e0674
   rdoc (8.1.0) sha256=befc37880a5cfd36dcb176c748b5fd5ee39dd3536a75e81824e4972ce230f60a
-  refract (1.1.0) sha256=ee3b9627e39f7692831101e2fedd73e0d09a592ff5d5c05f171d14211fc7a9c7
+  refract (1.2.0) sha256=4976e97e39c612f1c10e54e2d6e08a300572f1271c497b17e73d332544435511
   reline (0.7.0) sha256=5b012d8e55dbf9d450f12bde2cf7d15ff546ae80b3f8f3b30e570d431815583d
   rexml (3.4.4) sha256=19e0a2c3425dfbf2d4fc1189747bdb2f849b6c5e74180401b15734bc97b5d142
   rspec (3.13.2) sha256=206284a08ad798e61f86d7ca3e376718d52c0bc944626b2349266f239f820587
@@ -265,11 +269,12 @@ CHECKSUMS
   rspec-expectations (3.13.5) sha256=33a4d3a1d95060aea4c94e9f237030a8f9eae5615e9bd85718fe3a09e4b58836
   rspec-mocks (3.13.8) sha256=086ad3d3d17533f4237643de0b5c42f04b66348c28bf6b9c2d3f4a3b01af1d47
   rspec-support (3.13.7) sha256=0640e5570872aafefd79867901deeeeb40b0c9875a36b983d85f54fb7381c47c
+  samovar (2.5.1) sha256=8a9fc41eb8868084f0321eb41678c485cfbc7d282fb306c0be67c3284b1d2394
   sequel (5.110.0) sha256=c316335b352adb4109bb02ade237b1a6dbd493493def34542ce05893f62138ae
   sidereal (0.1.0)
   sourced (0.0.1)
-  sourced-component (0.1.1) sha256=61a0823a2f89e39dc08cdfaf1a6f565abed0a4edaad67241811da16004cdaa61
-  sourced-message (0.5.3) sha256=3d3f961157628e468e18486b81c0893c37a29fa52fae4b47f45260f74510a19d
+  sourced-component (0.1.5) sha256=515e7f6461d3966d8517fa1caa8c3eba9cf3554ada0a39eee0d187d578a64efb
+  sourced-message (0.5.4) sha256=f373425b72ce30a05955e0b70e08797a25989e1dfb8d2511bad07e10f590f5a0
   sourced-ui (0.1.0)
   sqlite3 (2.10.2-aarch64-linux-gnu) sha256=e9aea2c2b3476fc875dd8a89313a9a2862818519c0186bfb5b56d6f57bb08d98
   sqlite3 (2.10.2-aarch64-linux-musl) sha256=4986fc40cdf21342362b72a941df28e95cfe0e644f3ad2532d948b157c39dbee

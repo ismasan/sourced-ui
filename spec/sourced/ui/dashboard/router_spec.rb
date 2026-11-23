@@ -43,7 +43,18 @@ RSpec.describe Sourced::UI::Dashboard::App do
     class Carts < TestProjector; end
   end
 
-  before(:all) do
+  # Sourced spawns its housekeeping fibers into the current Async task, even
+  # with no workers: run each example in a reactor, booting Sourced afresh
+  # inside it, and stop whatever is still running when it ends.
+  around do |example|
+    Sync do |task|
+      example.run
+    ensure
+      task.children&.each(&:stop)
+    end
+  end
+
+  before do
     Sourced.reset!
     Sourced.config.config!('store.install_tables') { true }
     Sourced.config.config!('workers.count') { 0 }
@@ -60,7 +71,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
     store.append(events)
   end
 
-  after(:all) do
+  after do
     Sourced.teardown!
     Sourced.reset!
   end
@@ -319,7 +330,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
   describe 'GET /reactors/:group_id/instance' do
     # A light installed, switched on and dimmed: each command, then what it
     # appended, caused by it.
-    before(:all) do
+    before do
       keys = { light_id: 'lamp-1' }
       [SpecLight::Install, SpecLight::Toggle, SpecLight::Dim].each { Sourced.handle!(SpecLight, it.new(payload: keys)) }
       Sourced.store.append([SpecLight::Install.new(payload: { light_id: 'lamp-2' })])
