@@ -161,6 +161,34 @@ RSpec.describe Sourced::UI::Components::Statechart do
     end
   end
 
+  # Edges can route around the outside of the boxes laid out: the drawing is
+  # as big as what's in it, so none is cut off at its edge.
+  it 'fits every line and label it draws inside its view' do
+    [SpecTrip, SpecAlarm, SpecReview].each do |machine|
+      svg = Nokogiri::XML(render(machine.to_h))
+      root = svg.root
+      x, y, w, h = root['viewBox'].split.map(&:to_f)
+      points = root.css('path[d]').flat_map { it['d'].scan(/-?\d+(?:\.\d+)?/).map(&:to_f).each_slice(2).to_a }
+      points += root.css('text[x][y]').map { [it['x'].to_f, it['y'].to_f] }
+
+      expect(points).to all(satisfy { |px, py| px.between?(x, x + w) && py.between?(y, y + h) }), machine.name
+      expect([root['width'].to_i, root['height'].to_i]).to eq([w.round, h.round])
+    end
+  end
+
+  it 'widens its view to an edge routed outside the boxes, and to its label' do
+    chart = described_class.new(SpecAlarm.to_h)
+    root = Struct.new(:x, :y, :right, :bottom).new(0, 0, 200, 100)
+    edge = described_class::Edge.new(from: 'a', to: 'b', label: 'Rescan', kind: :command)
+    # Out to the left and below the boxes: the line's lowest point sets the
+    # bottom, its label (ending at x -30) the left.
+    drawing = ['M 10 50 C -60 50, -60 160, 10 130', [-30, 145, 'end']]
+
+    x1, y1, x2, y2 = chart.send(:bounds, root, [[edge, drawing]])
+    expect(x1).to eq(-30 - 'Rescan'.length * described_class::EDGE_CHAR_W) # -66, past the line's -60
+    expect([y1, x2, y2]).to eq([0, 200, 160])
+  end
+
   it 'draws a chart with nothing in it' do
     expect(render({ machine: 'Empty', initial: nil, states: {} })).to include('<svg', 'Empty statechart')
   end

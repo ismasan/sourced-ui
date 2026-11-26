@@ -46,6 +46,7 @@ module Sourced
         EDGE_CHAR_W = 6.0  # the same, for arrow labels
         LABEL_H = 12
         UPRIGHT = 4.0      # how much more an edge's ends lean upright than its first and last stretches
+        MARGIN = 8         # around everything drawn
         ACTION_H = 14      # a line of a checkpoint's entry and exit actions
         ACTION_TOP = 4     # room above its first one, under the checkpoint's name
         ACTION_BOTTOM = 5  # and below its last, clear of the box's border
@@ -103,15 +104,29 @@ module Sourced
           root = layout_region(@chart, ROOT, :root)
           place(root, 0, 0)
 
+          drawings = regions(root).flat_map do |region|
+            region.edges.map { |placement, route| [placement.edge, routed(region, placement, route)] }
+          end
+          @loops_on.each do |id, loops|
+            loops.each_with_index { |edge, i| drawings << [edge, self_loop(@boxes.fetch(id), i, loops.size)] }
+          end
+          @direct.each { |edge| drawings << [edge, route(@boxes.fetch(edge.from), @boxes.fetch(edge.to))] }
+
+          # What's drawn, not just the boxes laid out: an edge routed around
+          # the outside, or its label, reaches past them.
+          x1, y1, x2, y2 = bounds(root, drawings)
+          w = (x2 - x1 + MARGIN * 2).round
+          h = (y2 - y1 + MARGIN * 2).round
+
           svg(
             id: 'statechart',
             class: 'statechart',
-            viewBox: "-8 -8 #{(root.w + 16).round} #{(root.h + 16).round}",
-            width: (root.w + 16).round,
-            height: (root.h + 16).round,
+            viewBox: "#{f(x1 - MARGIN)} #{f(y1 - MARGIN)} #{w} #{h}",
+            width: w,
+            height: h,
             # Its natural width, which the CSS scales from: never blown up past
             # readable, however wide the page.
-            style: "--sc-w: #{(root.w + 16).round}px",
+            style: "--sc-w: #{w}px",
             role: 'img',
             aria: { label: @title }
           ) do |s|
@@ -126,13 +141,6 @@ module Sourced
             end
 
             draw_region_contents(s, root)
-            drawings = regions(root).flat_map do |region|
-              region.edges.map { |placement, route| [placement.edge, routed(region, placement, route)] }
-            end
-            @loops_on.each do |id, loops|
-              loops.each_with_index { |edge, i| drawings << [edge, self_loop(@boxes.fetch(id), i, loops.size)] }
-            end
-            @direct.each { |edge| drawings << [edge, route(@boxes.fetch(edge.from), @boxes.fetch(edge.to))] }
             # Every label over every line: a line passing under one is hidden
             # by its halo there, rather than striking through it.
             drawings.each { |edge, drawing| draw_line(s, edge, drawing) }
@@ -377,6 +385,32 @@ module Sourced
             end
           else nil
           end
+        end
+
+        # [left, top, right, bottom] of everything drawn: the +root+ region's
+        # boxes, and each drawing's line and label. A line's every point,
+        # control points included, since a cubic stays within them; a label
+        # by its width, from its anchor, and a line's height.
+        def bounds(root, drawings)
+          xs = [root.x, root.right]
+          ys = [root.y, root.bottom]
+          drawings.each do |edge, (d, (lx, ly, anchor))|
+            d.scan(/-?\d+(?:\.\d+)?/).map(&:to_f).each_slice(2) do |x, y|
+              xs << x
+              ys << y if y
+            end
+            next unless lx && ly
+
+            width = text_width(edge.label.to_s)
+            left = case anchor
+                   when 'middle' then lx - width / 2.0
+                   when 'end' then lx - width
+                   else lx
+                   end
+            xs.push(left, left + width)
+            ys.push(ly - LABEL_H, ly + 4)
+          end
+          [xs.min, ys.min, xs.max, ys.max]
         end
 
         # Every region box under +box+, +box+ first if it's one.
