@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'sidereal'
+require 'sourced/ui/dashboard/components/message_name'
 
 module Sourced
   module UI
@@ -61,6 +62,8 @@ module Sourced
                 yield if block_given?
 
                 div(id: 'modal', data: { show: '$modal' })
+                # The message schema dialog MessageName opens.
+                render MessageSchema::Dialog.new
               end
             end
           end

@@ -11,6 +11,9 @@ require 'sourced/ui/dashboard/components/system_page'
 require 'sourced/ui/dashboard/components/message_page'
 require 'sourced/ui/dashboard/components/events_tree'
 require 'sourced/ui/dashboard/components/topology_page'
+require 'sourced/ui/dashboard/components/topology_map_page'
+require 'sourced/ui/dashboard/components/boundary_maps'
+require 'sourced/ui/dashboard/components/message_name'
 require 'sourced/ui/dashboard/components/offsets_page'
 require 'sourced/ui/dashboard/components/reactor_page'
 require 'sourced/ui/dashboard/components/machine_instance_page'
@@ -31,6 +34,11 @@ module Sourced
       # accepts; a click on a card a moment stale is refused with a 409.
       class Service < Sidereal::App
         session secret: ENV.fetch('SOURCED_DASHBOARD_SESSION_SECRET') { 'x' * 64 }
+
+        # Their scripts, which the layout links: the full screen map's pan
+        # and zoom, and placing the message schema dialog.
+        component Components::BoundaryMaps
+        component Components::MessageName
 
         handle ConsumerGroupMachine::Start do |cmd|
           refusing_invalid_transitions { Sourced.start_consumer_group(cmd.payload.group_id) }
@@ -156,8 +164,42 @@ module Sourced
           component(Components::OffsetsPage.new(result:, groups:, selected_group: group_id))
         end
 
+        # The boundaries map filling the window. ?grouped=true starts by
+        # namespace; ?reads=true or false starts with reads shown or not.
+        get '/topology/map' do
+          reactors = Sourced.router.reactors
+          flag = ->(name) { { 'true' => true, 'false' => false }[request.params[name]] }
+          component(Components::TopologyMapPage.new(
+            boundaries: Sourced::UI::Boundaries.build(Sourced.topology, reactors),
+            grouped: flag.('grouped') || false,
+            projections: flag.('reads')
+          ))
+        end
+
+        # The full screen map's panel for a box clicked: a reactor's, or a
+        # namespace's (?id=expenses.*).
+        get '/topology/map/panel' do
+          reactors = Sourced.router.reactors
+          boundaries = Sourced::UI::Boundaries.build(Sourced.topology, reactors)
+          panel = Components::ReactorPanel.new(boundaries:, group_id: request.params['id'].to_s,
+                                               topology: Sourced.topology, reactors:)
+          datastar.stream { |sse| sse.patch_elements panel }
+        end
+
+        # A message's payload schema, patched into MessageName's dialog.
+        get '/messages/schema' do
+          klass = Sourced::Message.registry[request.params['type'].to_s]
+          schema = if Module === klass && klass <= Sourced::Message
+                     Components::MessageSchema.new(klass)
+                   else
+                     Components::MessageSchema::Missing.new
+                   end
+          datastar.stream { |sse| sse.patch_elements schema }
+        end
+
         get '/topology' do
-          component(Components::TopologyPage.new(topology: Sourced.topology.map(&:to_h)))
+          reactors = Sourced.router.reactors
+          component(Components::TopologyPage.new(boundaries: Sourced::UI::Boundaries.build(Sourced.topology, reactors)))
         end
 
         get '/reactors/:group_id' do |group_id:|

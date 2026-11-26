@@ -152,6 +152,53 @@ RSpec.describe Sourced::UI::Dashboard::App do
     end
   end
 
+  describe 'GET /topology/map' do
+    # These reactors keep to their own: the page says so. (The map itself:
+    # boundaries_spec.)
+    it 'returns 200 with text/html' do
+      get '/topology/map', grouped: 'true', reads: 'false'
+      expect(last_response.status).to eq(200)
+      expect(last_response.content_type).to include('text/html')
+      expect(last_response.body).to include('No messages cross between the registered reactors')
+    end
+
+    it 'links its pan and zoom script, which BoundaryMaps declares, and serves it' do
+      get '/topology/map'
+      src = last_response.body[%r{<script type="module" src="([^"]*/_assets/topology/boundary_map-\h+\.js)"}, 1]
+      expect(src).not_to be_nil
+
+      get src
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include('data-pan-zoom')
+    end
+  end
+
+  describe 'GET /topology/map/panel' do
+    it "streams a reactor's panel in" do
+      get '/topology/map/panel', id: SpecLight.group_id
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include('datastar-patch-elements', 'id="reactor-panel"', 'class="statechart"')
+    end
+  end
+
+  describe 'GET /messages/schema' do
+    it "patches a message's schema into the dialog" do
+      get '/messages/schema', type: RouterTestEvent.type
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include('datastar-patch-elements', 'id="message-schema-body"', 'thing_id')
+    end
+
+    it "says so for a type that's no message's" do
+      get '/messages/schema', type: 'nope.nothing'
+      expect(last_response.body).to include('id="message-schema-body"', 'No schema for this message.')
+    end
+
+    it 'puts the dialog in every page' do
+      get '/topology'
+      expect(last_response.body).to include('id="message-schema"', 'popover="auto"')
+    end
+  end
+
   describe 'POST /commands' do
     def post_command(type, group_id = TestProjector.group_id)
       post '/commands', command: { type: "sourced.consumer_groups.#{type}", payload: { group_id: } }
@@ -189,6 +236,11 @@ RSpec.describe Sourced::UI::Dashboard::App do
       get '/log/1/'
       expect(last_response.status).to eq(200)
       expect(last_response.content_type).to include('text/html')
+    end
+
+    it 'matches /topology/map/ the same as /topology/map' do
+      get '/topology/map/'
+      expect(last_response.status).to eq(200)
     end
 
     it 'matches /topology/ the same as /topology' do

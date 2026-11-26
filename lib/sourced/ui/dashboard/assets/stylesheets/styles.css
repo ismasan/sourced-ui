@@ -2080,3 +2080,393 @@ dl.prop-table {
   button:disabled:hover { background: var(--slate-50); border-color: var(--slate-300); }
 }
 .feed-nav + .panel__link { margin-left: 0.5rem; }
+
+/* Topology: the reactors, and the messages crossing between them */
+.topology__lead { max-width: 60rem; margin: 0.5rem 0 0; font-size: 14px; line-height: 1.5; }
+.topology .chart-card__canvas { padding: 1rem; }
+.topology__table td:first-child, .topology__table td:nth-child(3) { white-space: nowrap; }
+.topology__table a { color: var(--teal-700); text-decoration: none; font-weight: 500; }
+.topology__table a:hover { text-decoration: underline; }
+
+.boundary-map {
+  display: block;
+  margin: 0 auto;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.boundary-map__box {
+  fill: white;
+  stroke: var(--slate-300);
+  stroke-width: 1.2;
+  filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, 0.1));
+}
+.boundary-map__stripe { fill: var(--slate-400); }
+.boundary-map__node--machine .boundary-map__stripe { fill: var(--teal-600); }
+.boundary-map__node--decider .boundary-map__stripe { fill: var(--amber-400); }
+.boundary-map__node--projector .boundary-map__stripe { fill: var(--em-readmodel-stroke); }
+.boundary-map__kind {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  fill: var(--slate-400);
+}
+.boundary-map__name { font-size: 12.5px; font-weight: 600; fill: var(--slate-800); }
+.boundary-map__link { cursor: pointer; }
+.boundary-map__node:hover .boundary-map__box { stroke: var(--teal-600); stroke-width: 2; }
+
+.boundary-map__edge { fill: none; stroke-width: 1.5; transition: opacity 0.12s; }
+.boundary-map__edge--command { stroke: #3b82f6; }
+.boundary-map__edge--event { stroke: #f97316; }
+.boundary-map__edge--projection { stroke: #86c99c; stroke-width: 1.1; stroke-dasharray: 4 3; }
+.boundary-map__arrow--command { fill: #3b82f6; }
+.boundary-map__arrow--event { fill: #f97316; }
+.boundary-map__arrow--projection { fill: #86c99c; }
+
+.boundary-map__label { font-size: 10.5px; font-weight: 500; transition: opacity 0.12s; paint-order: stroke; stroke: var(--slate-50); stroke-width: 3px; stroke-linejoin: round; }
+.boundary-map__label--command { fill: #1e40af; }
+.boundary-map__label--event { fill: #9a3412; }
+.boundary-map__label--projection { fill: var(--slate-500); font-weight: 400; }
+
+.em-key__item.bm-key--command::before { height: 0; border-radius: 0; border-width: 2px 0 0; border-color: #3b82f6; }
+.em-key__item.bm-key--event::before { height: 0; border-radius: 0; border-width: 2px 0 0; border-color: #f97316; }
+.em-key__item.bm-key--projection::before { height: 0; border-radius: 0; border-width: 2px 0 0; border-style: dashed; border-color: #86c99c; }
+
+.bm-message { font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace; font-size: 12px; }
+.bm-message--command { color: #1e40af; }
+.bm-message--event { color: #9a3412; }
+.bm-relation { font-size: 12px; color: var(--slate-600); }
+.bm-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+.topology__table td { vertical-align: top; }
+
+/* Self-contained reactors, on the Topology page */
+.topology__isolated {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reactor-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.7rem 0.35rem 0.6rem;
+  border: 1px solid var(--slate-200);
+  border-left: 3px solid var(--slate-400);
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+  color: var(--slate-800);
+  text-decoration: none;
+}
+a.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--teal-600); }
+.reactor-pill__name { font-weight: 600; }
+.reactor-pill__kind {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--slate-400);
+}
+.reactor-pill--machine { border-left-color: var(--teal-600); }
+.reactor-pill--decider { border-left-color: var(--amber-400); }
+.reactor-pill--projector { border-left-color: var(--em-readmodel-stroke); }
+.boundary-map__node--namespace .boundary-map__box { stroke: var(--slate-400); stroke-width: 1.5; }
+.boundary-map__node--namespace .boundary-map__stripe { fill: var(--slate-700); }
+
+/* The boundaries map filling the window (/topology/map), to pan and zoom */
+.chart-card__expand {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--teal-700);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.chart-card__expand:hover { text-decoration: underline; }
+
+.topology-full {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--slate-50);
+  background-image: radial-gradient(var(--slate-200) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+.topology-full__bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  padding: 0.6rem 1rem;
+  background: white;
+  border-bottom: 1px solid var(--slate-200);
+  font-size: 13px;
+
+  strong { color: var(--slate-800); }
+}
+.topology-full__back { color: var(--teal-700); text-decoration: none; font-weight: 500; }
+.topology-full__back:hover { text-decoration: underline; }
+.topology-full__hint { font-size: 12px; }
+.topology-full__canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  /* Dragging pans: nothing in the map is selected (Safari needs the prefix). */
+  -webkit-user-select: none;
+  user-select: none;
+
+  .boundary-map {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    cursor: grab;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .boundary-map.is-panning { cursor: grabbing; }
+  .boundary-map.is-panning .boundary-map__link { cursor: grabbing; }
+  .topology__none { padding: 2rem; }
+}
+
+.zoom-controls {
+  display: inline-flex;
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  overflow: hidden;
+
+  button {
+    padding: 0.25rem 0.6rem;
+    border: 0;
+    border-left: 1px solid var(--slate-200);
+    background: white;
+    font: inherit;
+    font-size: 12px;
+    color: var(--slate-700);
+    cursor: pointer;
+  }
+  button:first-child { border-left: 0; }
+  button:hover { background: var(--slate-50); color: var(--teal-700); }
+}
+
+/* The full screen map's panel: a picked box's detail, beside the map */
+.topology-full__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.topology-full__maps {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.boundary-map__node.is-selected .boundary-map__box { stroke: var(--teal-600); stroke-width: 2.5; }
+
+.reactor-panel {
+  flex: none;
+  width: min(560px, 45vw);
+  overflow: auto;
+  background: white;
+  border-left: 1px solid var(--slate-200);
+  box-shadow: -4px 0 12px rgba(15, 23, 42, 0.06);
+  padding: 1rem 1.25rem 2rem;
+  font-size: 13px;
+}
+.reactor-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+
+  h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+}
+.reactor-panel__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.reactor-panel__open { color: var(--teal-700); text-decoration: none; font-weight: 500; white-space: nowrap; }
+.reactor-panel__open:hover { text-decoration: underline; }
+.reactor-panel__close {
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  background: white;
+  width: 1.8rem;
+  height: 1.8rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--slate-500);
+  cursor: pointer;
+}
+.reactor-panel__close:hover { color: var(--slate-800); border-color: var(--slate-400); }
+.reactor-panel__id { margin: 0.35rem 0 1rem; code { font-size: 12px; color: var(--slate-500); } }
+
+.reactor-panel__chart {
+  margin: 0 0 1.25rem;
+  overflow: auto;
+  max-height: 55vh;
+  padding: 0.75rem;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background-color: var(--slate-50);
+  background-image: radial-gradient(var(--slate-200) 1px, transparent 1px);
+  background-size: 16px 16px;
+
+  .statechart { min-width: calc(var(--sc-w) * 0.8); }
+}
+.reactor-panel__chart--plain { padding: 0; background: white; }
+
+.reactor-panel__section {
+  margin-top: 1rem;
+
+  h3 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--slate-500);
+    margin: 0 0 0.4rem;
+  }
+}
+.reactor-panel__messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+
+  li { overflow-wrap: anywhere; }
+}
+.reactor-panel__none { margin: 0; }
+.reactor-panel__members { margin-top: 0.75rem; }
+button.reactor-pill { font: inherit; font-size: 13px; cursor: pointer; }
+button.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--teal-600); }
+.reactor-panel__recipients li { line-height: 1.6; }
+.reactor-panel__recipient { display: block; font-weight: 600; color: var(--slate-700); }
+
+/* A reactor's dispatches in its panel, by state or by reaction */
+.reactor-panel__groups { display: grid; gap: 0.6rem; }
+.reactor-panel__group {
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem 0.5rem;
+}
+.reactor-panel__group-name {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal-700);
+  margin-bottom: 0.3rem;
+}
+.reactor-panel__triggers {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.2rem 0.9rem;
+  margin: 0;
+
+  dt { font-size: 11px; color: var(--slate-500); padding-top: 0.1rem; white-space: nowrap; }
+  dd { margin: 0; }
+}
+.reactor-panel__item { overflow-wrap: anywhere; line-height: 1.5; }
+.reactor-panel__starts { color: var(--slate-700); font-style: italic; }
+.reactor-panel__takers li { cursor: default; }
+.reactor-panel__taker { font-weight: 600; color: var(--slate-700); }
+
+/* A message's name that opens its schema (MessageName), and the dialog */
+.message-name {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.message-name.bm-message { font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace; font-size: 12px; }
+.message-name.bm-message--command { color: #1e40af; }
+.message-name.bm-message--event { color: #9a3412; }
+.message-name:hover { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+.message-name:focus-visible { outline: 2px solid var(--teal-400); outline-offset: 2px; border-radius: 2px; }
+.message-name--code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace;
+  font-size: 12px;
+  color: var(--slate-800);
+}
+button.cmd { font: inherit; font-size: 12px; cursor: pointer; }
+button.cmd:hover { text-decoration: none; border-color: var(--slate-400); }
+
+.kind-badge--command { color: #1e40af; background: #dbeafe; border-color: #bfdbfe; }
+.kind-badge--event { color: #9a3412; background: #ffedd5; border-color: #fed7aa; }
+.kind-badge--namespace { color: var(--slate-700); background: var(--slate-100); }
+
+.message-schema {
+  /* Placed by message_schema.js, beside the name that opened it. */
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(440px, calc(100vw - 16px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 0;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--slate-800);
+}
+.message-schema__loading { margin: 0; padding: 0.9rem 1rem; color: var(--slate-500); }
+.message-schema.is-loading > * { opacity: 0.45; transition: opacity 0.1s; }
+
+.message-schema__body { padding: 0.8rem 1rem 0.9rem; }
+.message-schema__head { display: flex; align-items: center; gap: 0.5rem; }
+.message-schema__name { font-size: 14px; overflow-wrap: anywhere; }
+.message-schema__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.15rem 0.75rem;
+  margin: 0.6rem 0 0.75rem;
+  font-size: 12px;
+
+  dt { color: var(--slate-400); }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  code { font-size: 11.5px; color: var(--slate-600); }
+}
+.message-schema__fields {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--slate-400);
+    padding: 0 0.5rem 0.35rem 0;
+    border-bottom: 1px solid var(--slate-200);
+  }
+  td { padding: 0.35rem 0.5rem 0.35rem 0; border-bottom: 1px solid var(--slate-100); vertical-align: top; font-size: 12px; }
+  tr:last-child td { border-bottom: 0; }
+}
+.message-schema__attr { font-size: 12px; color: var(--slate-800); overflow-wrap: anywhere; }
+.message-schema__type { font-size: 11.5px; color: var(--teal-700); overflow-wrap: anywhere; }
+.message-schema__desc { margin: 0.15rem 0 0; font-size: 11.5px; color: var(--slate-500); }
+.message-schema__none { margin: 0; }
+.message-schema__nullable {
+  margin-left: 0.35rem;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  font-size: 10px;
+  color: var(--slate-500);
+  background: var(--slate-100);
+}

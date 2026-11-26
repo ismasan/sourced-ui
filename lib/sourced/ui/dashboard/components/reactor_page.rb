@@ -3,6 +3,7 @@
 require 'sourced/ui/components'
 require 'sourced/ui/dashboard/components/layout'
 require 'sourced/ui/dashboard/components/system_page'
+require 'sourced/ui/dashboard/components/message_name'
 
 module Sourced
   module UI
@@ -15,12 +16,7 @@ module Sourced
         # with what it accepts and refuses, at /reactors/:group_id/states/:state
         # (the state as its chart DOM id).
         class ReactorPage < Component
-          KINDS = {
-            Sourced::Machine => 'machine',
-            Sourced::Decider => 'decider',
-            Sourced::Projector => 'projector',
-            Sourced::DurableWorkflow => 'workflow'
-          }.freeze
+          KINDS = Sourced::UI::Boundaries::KINDS
 
           # @return [ReactorPage, nil] nil for a reactor or state that doesn't exist
           # @param topology [#call] returns Sourced.topology: only built for a reactor that isn't a machine
@@ -195,7 +191,7 @@ module Sourced
               ul(class: 'type-list') do
                 list.each do |klass|
                   li do
-                    code { klass.type }
+                    MessageName(type: klass.type, text: klass.type, classes: 'message-name--code')
                     span(class: 'muted') { klass.name.to_s }
                   end
                 end
@@ -514,9 +510,8 @@ module Sourced
                     else
                       transition[:label]
                     end
-            code(class: "cmd cmd--#{transition[:kind]}", title: transition[:event]) do
-              transition[:kind] == 'event' ? "on #{label}" : label
-            end
+            text = transition[:kind] == 'event' ? "on #{label}" : label
+            MessageName(type: transition[:event], text:, classes: "cmd cmd--#{transition[:kind]}")
           end
 
           # Where a transition leads: its targets, whether it may stay, the
