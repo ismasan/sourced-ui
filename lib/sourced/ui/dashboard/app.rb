@@ -173,6 +173,16 @@ module Sourced
           ))
         end
 
+        # The full screen map's panel for a box clicked: a reactor's, or a
+        # namespace's (?id=expenses.*).
+        get '/topology/map/panel' do
+          reactors = Sourced.router.reactors
+          boundaries = Sourced::UI::Boundaries.build(Sourced.topology, reactors)
+          panel = Components::ReactorPanel.new(boundaries:, group_id: request.params['id'].to_s,
+                                               topology: Sourced.topology, reactors:)
+          datastar.stream { |sse| sse.patch_elements panel }
+        end
+
         get '/topology' do
           reactors = Sourced.router.reactors
           component(Components::TopologyPage.new(boundaries: Sourced::UI::Boundaries.build(Sourced.topology, reactors)))

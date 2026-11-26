@@ -2215,6 +2215,9 @@ a.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--t
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* Dragging pans: nothing in the map is selected (Safari needs the prefix). */
+  -webkit-user-select: none;
+  user-select: none;
 
   .boundary-map {
     width: 100%;
@@ -2222,6 +2225,7 @@ a.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--t
     min-width: 0;
     cursor: grab;
     touch-action: none;
+    -webkit-user-select: none;
     user-select: none;
   }
   .boundary-map.is-panning { cursor: grabbing; }
@@ -2248,3 +2252,128 @@ a.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--t
   button:first-child { border-left: 0; }
   button:hover { background: var(--slate-50); color: var(--teal-700); }
 }
+
+/* The full screen map's panel: a picked box's detail, beside the map */
+.topology-full__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.topology-full__maps {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.boundary-map__node.is-selected .boundary-map__box { stroke: var(--teal-600); stroke-width: 2.5; }
+
+.reactor-panel {
+  flex: none;
+  width: min(560px, 45vw);
+  overflow: auto;
+  background: white;
+  border-left: 1px solid var(--slate-200);
+  box-shadow: -4px 0 12px rgba(15, 23, 42, 0.06);
+  padding: 1rem 1.25rem 2rem;
+  font-size: 13px;
+}
+.reactor-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+
+  h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+}
+.reactor-panel__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.reactor-panel__open { color: var(--teal-700); text-decoration: none; font-weight: 500; white-space: nowrap; }
+.reactor-panel__open:hover { text-decoration: underline; }
+.reactor-panel__close {
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  background: white;
+  width: 1.8rem;
+  height: 1.8rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--slate-500);
+  cursor: pointer;
+}
+.reactor-panel__close:hover { color: var(--slate-800); border-color: var(--slate-400); }
+.reactor-panel__id { margin: 0.35rem 0 1rem; code { font-size: 12px; color: var(--slate-500); } }
+
+.reactor-panel__chart {
+  margin: 0 0 1.25rem;
+  overflow: auto;
+  max-height: 55vh;
+  padding: 0.75rem;
+  border: 1px solid var(--slate-200);
+  border-radius: 8px;
+  background-color: var(--slate-50);
+  background-image: radial-gradient(var(--slate-200) 1px, transparent 1px);
+  background-size: 16px 16px;
+
+  .statechart { min-width: calc(var(--sc-w) * 0.8); }
+}
+.reactor-panel__chart--plain { padding: 0; background: white; }
+
+.reactor-panel__section {
+  margin-top: 1rem;
+
+  h3 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--slate-500);
+    margin: 0 0 0.4rem;
+  }
+}
+.reactor-panel__messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+
+  li { overflow-wrap: anywhere; }
+}
+.reactor-panel__none { margin: 0; }
+.reactor-panel__members { margin-top: 0.75rem; }
+button.reactor-pill { font: inherit; font-size: 13px; cursor: pointer; }
+button.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--teal-600); }
+.reactor-panel__recipients li { line-height: 1.6; }
+.reactor-panel__recipient { display: block; font-weight: 600; color: var(--slate-700); }
+
+/* A reactor's dispatches in its panel, by state or by reaction */
+.reactor-panel__groups { display: grid; gap: 0.6rem; }
+.reactor-panel__group {
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem 0.5rem;
+}
+.reactor-panel__group-name {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--teal-700);
+  margin-bottom: 0.3rem;
+}
+.reactor-panel__triggers {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.2rem 0.9rem;
+  margin: 0;
+
+  dt { font-size: 11px; color: var(--slate-500); padding-top: 0.1rem; white-space: nowrap; }
+  dd { margin: 0; }
+}
+.reactor-panel__item { overflow-wrap: anywhere; line-height: 1.5; }
+.reactor-panel__starts { color: var(--slate-700); font-style: italic; }
+.reactor-panel__takers li { cursor: default; }
+.reactor-panel__taker { font-weight: 600; color: var(--slate-700); }

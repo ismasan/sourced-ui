@@ -4,6 +4,7 @@ require 'spec_helper'
 require 'sourced/ui/components'
 require_relative '../../support/spec_shop'
 require_relative '../../support/spec_light'
+require_relative '../../support/spec_alarm'
 
 RSpec.describe Sourced::UI::Boundaries do
   subject(:boundaries) { described_class.build(Sourced::Topology.build(SpecShop::REACTORS), SpecShop::REACTORS) }
@@ -91,6 +92,14 @@ RSpec.describe Sourced::UI::Components::BoundaryMap do
     expect(html.scan('class="boundary-map__node ').size).to eq(6)
     expect(html.scan('class="boundary-map__edge ').size).to eq(boundaries.links.size)
     expect(html).to include('href="/reactors/spec_shop.checkout"', '>ChargePayment<', 'decider · 1 from outside')
+  end
+
+  it "dims what isn't a reactor's own lines while it's hovered, or picked with nothing hovered" do
+    html = described_class.new(boundaries).call
+    expect(html).to include(
+      '.boundary-map:has([data-node="spec_shop.checkout"]:hover) [data-ends]:not([data-ends~="spec_shop.checkout"])',
+      '.boundary-map:not(:has([data-node]:hover)):has([data-node="spec_shop.checkout"].is-selected) [data-ends]:not([data-ends~="spec_shop.checkout"])'
+    )
   end
 
   it 'leaves out reads, and the reactors only they link, without projections' do
@@ -222,7 +231,7 @@ RSpec.describe Sourced::UI::Dashboard::Components::TopologyMapPage do
 
   it 'starts with the switches as given' do
     html = render(grouped: true, projections: false)
-    expect(html).to include('{&quot;projections&quot;:false,&quot;grouped&quot;:true}')
+    expect(html).to include('{&quot;projections&quot;:false,&quot;grouped&quot;:true,&quot;selected&quot;:&quot;&quot;}')
     # The namespace view shows; the reactor maps start hidden.
     expect(html).to match(/topology-full__canvas" style="display: none" data-show="!\$grouped && \$projections"/)
   end
@@ -242,5 +251,68 @@ RSpec.describe Sourced::UI::Dashboard::Components::BoundaryMaps do
     expect(html).to include('href="/topology/map?grouped=false&reads=true"',
                             %(data-effect="el.href = '/topology/map?grouped=' + $grouped + '&reads=' + $projections"))
     expect(html).not_to include('data-attr:href')
+  end
+end
+
+RSpec.describe Sourced::UI::Dashboard::Components::ReactorPanel do
+  let(:topology) { Sourced::Topology.build(SpecShop::REACTORS) }
+  let(:boundaries) { Sourced::UI::Boundaries.build(topology, SpecShop::REACTORS) }
+  let(:context) { Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology/map')) }
+
+  def render(group_id) = described_class.new(boundaries:, group_id:, topology:, reactors: SpecShop::REACTORS).call(context:)
+
+  it "shows a machine's statechart and commands, what it dispatches by state, and who takes its events" do
+    html = render(SpecShop::Shipment.group_id)
+    expect(html).to include('id="reactor-panel"', 'kind-badge--machine', 'class="statechart"', 'Commands (2)',
+                            'AddParcel', '→ shipping', 'href="/reactors/spec_shop.shipment"',
+                            'Dispatches, by state (1 state)', '<code class="reactor-panel__group-name">shipping</code>',
+                            '<dt>on AddParcel</dt>', 'starts SpecShop::Parcel',
+                            'Its events are taken by 1 reactor', 'SpecShop::Parcel</span><span class="muted"> started, 1 event')
+    expect(html).not_to include('display: none')
+  end
+
+  it "groups a machine's entry, timer and exit dispatches under each state" do
+    alarm_topology = Sourced::Topology.build([SpecAlarm])
+    alarm = Sourced::UI::Boundaries.build(alarm_topology, [SpecAlarm])
+    html = described_class.new(boundaries: alarm, group_id: SpecAlarm.group_id, topology: alarm_topology, reactors: [SpecAlarm])
+                          .call(context:)
+    armed = html[%r{<code class="reactor-panel__group-name">armed</code>.*?</dl>}m]
+    expect(armed).to include('<dt>on entry</dt>', '<dt>after computed</dt>', '<dt>on exit</dt>', 'Notify', 'SendSOS')
+  end
+
+  it "shows another reactor's event model, the events it takes and where from" do
+    html = render(SpecShop::Checkout.group_id)
+    expect(html).to include('class="event-model"', 'Events it takes (2)', 'from SpecShop::Orders',
+                            'Dispatches, by what it reacts to (2 reactions)', 'on SpecShop::OrderPlaced',
+                            '<dt>to SpecShop::Payments</dt>', 'SpecShop::ChargePayment')
+    expect(render(SpecShop::Orders.group_id)).to include('SpecShop::PlaceOrder', '→ SpecShop::OrderPlaced')
+  end
+
+  it "lists a namespace's reactors, each opening its own panel" do
+    html = render('spec_shop.*')
+    expect(html).to include('kind-badge--namespace', '6 reactors',
+                            %(data-on:click="$selected = &quot;spec_shop.orders&quot;; @get(&quot;/topology/map/panel?id=spec_shop.orders&quot;)"))
+  end
+
+  it 'starts empty and hidden' do
+    html = described_class.empty.call(context:)
+    expect(html).to include('id="reactor-panel"', 'display: none', %(data-show="$selected != ''"))
+    expect(html).not_to include('<h2>')
+  end
+end
+
+RSpec.describe Sourced::UI::Dashboard::Components::BoundaryMaps, 'full screen' do
+  let(:boundaries) { Sourced::UI::Boundaries.build(Sourced::Topology.build(SpecShop::REACTORS), SpecShop::REACTORS) }
+  let(:context) { Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology/map')) }
+
+  it 'has a click on a box open its panel, rather than its page, and light it' do
+    html = described_class.new(boundaries:, full: true).call(context:)
+    expect(html).to include('data-on:click__prevent="$selected = &quot;spec_shop.checkout&quot;; @get(',
+                            %(data-class:is-selected="$selected == &quot;spec_shop.checkout&quot;"), 'id="reactor-panel"')
+  end
+
+  it 'leaves the Topology card following links' do
+    html = described_class.new(boundaries:).call(context:)
+    expect(html).not_to include('click__prevent', 'reactor-panel')
   end
 end

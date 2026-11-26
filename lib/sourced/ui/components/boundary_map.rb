@@ -34,9 +34,12 @@ module Sourced
         # @param href [#call, nil] a reactor's URL from its group_id, or nil for none
         # @param projections [Boolean] whether to draw what's only read
         # @param title [String] accessible name for the drawing
-        def initialize(boundaries, href: nil, projections: true, title: 'Reactor boundaries')
+        # @param node_data [#call, nil] a reactor's (or a group's) box => more
+        #   +data-+ attributes for it, such as a Datastar click handler
+        def initialize(boundaries, href: nil, projections: true, title: 'Reactor boundaries', node_data: nil)
           @boundaries = boundaries
           @href = href
+          @node_data = node_data
           @title = title
           # Marker ids of its own: a page draws the map twice, and url(#id)
           # finds the first, hidden with its map.
@@ -137,7 +140,8 @@ module Sourced
           kind = kind_of(reactor)
           url = @href&.call(reactor.group_id)
           group = lambda do
-            s.g(class: "boundary-map__node boundary-map__node--#{kind}", data: { node: reactor.group_id }) do
+            data = { node: reactor.group_id }.merge(@node_data&.call(reactor) || {})
+            s.g(class: "boundary-map__node boundary-map__node--#{kind}", data:) do
               s.title { tooltip(reactor) }
               s.rect(x: box.x, y: box.y, width: BOX_W, height: BOX_H, rx: 6, class: 'boundary-map__box')
               s.rect(x: box.x, y: box.y + 6, width: 3, height: BOX_H - 12, rx: 1.5, class: 'boundary-map__stripe')
@@ -317,11 +321,17 @@ module Sourced
           end
         end
 
-        # One rule per reactor: hovering it dims every line and label but its own.
+        # Two rules per reactor: hovering it dims every line and label but its
+        # own, and so does picking it (its box lit, .is-selected, as the full
+        # screen map does), while no box is hovered.
         def highlight_rules
-          rules = @reactors.map do |reactor|
+          rules = @reactors.flat_map do |reactor|
             id = reactor.group_id.gsub(/["\\]/) { "\\#{it}" }
-            ".boundary-map:has([data-node=\"#{id}\"]:hover) [data-ends]:not([data-ends~=\"#{id}\"]) { opacity: 0.12; }"
+            others = "[data-ends]:not([data-ends~=\"#{id}\"]) { opacity: 0.12; }"
+            [
+              ".boundary-map:has([data-node=\"#{id}\"]:hover) #{others}",
+              ".boundary-map:not(:has([data-node]:hover)):has([data-node=\"#{id}\"].is-selected) #{others}"
+            ]
           end
           raw safe(rules.join("\n"))
         end

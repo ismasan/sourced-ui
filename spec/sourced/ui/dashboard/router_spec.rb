@@ -173,6 +173,14 @@ RSpec.describe Sourced::UI::Dashboard::App do
     end
   end
 
+  describe 'GET /topology/map/panel' do
+    it "streams a reactor's panel in" do
+      get '/topology/map/panel', id: SpecLight.group_id
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include('datastar-patch-elements', 'id="reactor-panel"', 'class="statechart"')
+    end
+  end
+
   describe 'POST /commands' do
     def post_command(type, group_id = TestProjector.group_id)
       post '/commands', command: { type: "sourced.consumer_groups.#{type}", payload: { group_id: } }

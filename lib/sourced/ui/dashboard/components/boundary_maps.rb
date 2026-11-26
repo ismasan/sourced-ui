@@ -2,6 +2,7 @@
 
 require 'json'
 require 'sourced/ui/components'
+require 'sourced/ui/dashboard/components/reactor_panel'
 
 module Sourced
   module UI
@@ -30,7 +31,10 @@ module Sourced
             @boundaries = boundaries
             @grouped = boundaries.grouped
             @full = full
-            map = ->(b, reads, title) { Sourced::UI::Components::BoundaryMap.new(b, href:, projections: reads, title:) }
+            # Full screen, a click on a box picks it (ReactorPanel), rather than
+            # following its link; the picked one is lit.
+            node_data = full ? method(:pick_data) : nil
+            map = ->(b, reads, title) { Sourced::UI::Components::BoundaryMap.new(b, href:, projections: reads, title:, node_data:) }
             @maps = {
               reactors: [map.(boundaries, true, 'Reactor boundaries'), map.(boundaries, false, 'Reactor boundaries, without reads')],
               namespaces: [map.(@grouped, true, 'Namespace boundaries'), map.(@grouped, false, 'Namespace boundaries, without reads')]
@@ -46,13 +50,17 @@ module Sourced
           end
 
           def view_template
-            signals = { projections: @shown, grouped: @start_grouped }.to_json
             if @full
+              signals = { projections: @shown, grouped: @start_grouped, selected: '' }.to_json
               div(class: 'topology-full', data: { signals:, 'pan-zoom' => true }) do
                 render_toolbar
-                render_canvases
+                div(class: 'topology-full__body') do
+                  div(class: 'topology-full__maps') { render_canvases }
+                  render ReactorPanel.empty
+                end
               end
             else
+              signals = { projections: @shown, grouped: @start_grouped }.to_json
               figure(class: 'chart-card', data: { signals: }) do
                 figcaption(class: 'chart-card__bar') do
                   strong { 'Boundaries' }
@@ -76,7 +84,7 @@ module Sourced
             div(class: 'topology-full__bar') do
               a(class: 'topology-full__back', href: helpers.url('/topology')) { '← Topology' }
               strong { 'Boundaries' }
-              span(class: 'muted topology-full__hint') { 'Drag to pan, scroll to zoom, double-click to fit.' }
+              span(class: 'muted topology-full__hint') { 'Drag to pan, scroll to zoom, double-click to fit. Click a box for its detail.' }
               div(class: 'chart-card__tools') do
                 render_switches
                 render_key
@@ -140,6 +148,16 @@ module Sourced
           def map_url = helpers.url("/topology/map?grouped=#{@start_grouped}&reads=#{@shown}")
 
           def map_url_expression = "'#{helpers.url('/topology/map')}?grouped=' + $grouped + '&reads=' + $projections"
+
+          # A box's click picks it, opening its panel, and its class lights it
+          # while it's picked.
+          def pick_data(reactor)
+            id = reactor.group_id
+            {
+              'on:click__prevent' => ReactorPanel.pick(helpers, id),
+              'class:is-selected' => "$selected == #{id.to_json}"
+            }
+          end
 
           def href = ->(group_id) { helpers.url("/reactors/#{group_id}") if @boundaries.reactor(group_id)&.reactor }
         end
