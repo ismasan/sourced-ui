@@ -16,6 +16,7 @@
   /* Teal accent */
   --teal-50: #f0fdfa;
   --teal-100: #ccfbf1;
+  --teal-300: #5eead4;
   --teal-400: #2dd4bf;
   --teal-600: #0d9488;
   --teal-700: #0f766e;
@@ -351,7 +352,7 @@ h2 {
 }
 
 .stream-container {
-  margin: 10px 0;
+  margin: 1rem 0;
   position: relative;
   .status {
     display: inline-block;
@@ -382,6 +383,8 @@ h2 {
     background: var(--amber-100);
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber-400) 60%, transparent);
   }
+  --bar-reached: var(--amber-400);
+  --bar-spread: var(--amber-200);
   .error-context {
     display: block;
     color: var(--amber-700);
@@ -410,9 +413,8 @@ h2 {
   background: var(--slate-100);
   border-color: var(--slate-300);
   box-shadow: inset 4px 0 0 var(--slate-500);
-  .stream-bar {
-    filter: saturate(0.25);
-  }
+  --bar-reached: var(--slate-400);
+  --bar-spread: var(--slate-300);
   .status {
     color: var(--slate-700);
     background: var(--slate-200);
@@ -432,18 +434,9 @@ h2 {
   background: var(--red-100);
   border-color: var(--red-400);
   box-shadow: inset 4px 0 0 var(--red-700);
-  .stream-bar {
-    border: solid 1px var(--red-400);
-    background:
-      repeating-linear-gradient(
-        -45deg,
-        transparent 0px,
-        transparent 6px,
-        var(--red-300) 6px,
-        var(--red-300) 7px
-      ),
-      var(--red-100);
-  }
+  --bar-reached: var(--red-700);
+  --bar-spread: var(--red-300);
+  --bar-track: var(--red-50);
   .status {
     color: #fff;
     background: var(--red-700);
@@ -524,7 +517,8 @@ h2 {
     color: var(--slate-600);
     background: var(--slate-200);
   }
-  .stream-bar { filter: grayscale(1); }
+  --bar-reached: var(--slate-300);
+  --bar-spread: var(--slate-200);
 }
 
 /* Consumer groups sharing a namespace, collapsed to a summary by default.
@@ -532,7 +526,7 @@ h2 {
    group slate, and one holding a retrying group amber, so each shows while
    collapsed. */
 .namespace {
-  margin: 10px 0;
+  margin: 1rem 0;
   background: var(--slate-50);
   border: 1px solid var(--slate-200);
   border-left: 4px solid var(--slate-300);
@@ -710,19 +704,18 @@ h2 {
   border-color: #fbbf24;
 }
 
+/* A group's progress through the log, as three flat bands from the start
+   of the log to its tip: what every partition has processed (up to the
+   oldest partition's position), where the partitions are spread (up to the
+   newest's), and what none has reached yet. The bands take the colour of
+   the group's status, set per status below; the positions sit under the
+   bar, at the band edges they mark. Teal unless a status says otherwise. */
+
 .stream-bar {
-  height: 30px;
-  background:
-    repeating-linear-gradient(
-      to right,
-      transparent 0px,
-      transparent 18px,
-      var(--slate-300) 18px,
-      var(--slate-300) 19px
-    ),
-    linear-gradient(to right, var(--teal-700), var(--teal-400));
-  border-radius: 6px;
-  border: solid 1px var(--slate-300);
+  height: 10px;
+  margin-bottom: 22px;
+  background: var(--bar-spread, var(--teal-300));
+  border-radius: 9999px;
   position: relative;
 }
 
@@ -746,63 +739,50 @@ h2 {
   border-bottom: 1px solid var(--slate-200);
 }
 
-.global-stream {
-  background: var(--teal-400);
-  border: 1px solid var(--teal-600);
-}
-
 .progress-marker {
   position: absolute;
-  width: 2px;
   height: 100%;
-  background: var(--teal-400);
-}
-
-.consumer-range {
-  position: absolute;
-  height: 100%;
-  background: #60a5fa;
+  background: var(--bar-reached, var(--teal-600));
+  border-radius: inherit;
 }
 
 .lower-range, .upper-range {
-  background: silver;
   position: absolute;
-  top: 10px;
+  top: 0;
+  bottom: 0;
   transition: width .6s ease;
 }
 .lower-range {
   left: 0;
+  background: var(--bar-reached, var(--teal-600));
+  border-radius: 9999px 0 0 9999px;
 }
 .upper-range {
   right: 0;
+  background: var(--bar-track, var(--slate-200));
+  border-radius: 0 9999px 9999px 0;
 }
+
+/* A position, under the bar, centred on the band edge it marks. */
 .tooltip {
   position: absolute;
-  background: var(--slate-800);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  opacity: 0.8;
+  top: calc(100% + 4px);
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--slate-600);
   white-space: nowrap;
-  display: block;
-  top: 4px;
-}
-.tooltip:hover {
-  opacity: 1;
 }
 .lower-range .tooltip {
   right: 0;
   transform: translateX(50%);
 }
-
 .upper-range .tooltip {
   left: 0;
   transform: translateX(-50%);
 }
 .tooltip-max {
   right: 0;
-  transform: translateX(50%);
 }
 
 /* Event list and event tree

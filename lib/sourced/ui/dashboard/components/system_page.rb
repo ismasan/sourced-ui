@@ -230,7 +230,7 @@ module Sourced
               oldest = group[:oldest_processed]
               newest = group[:newest_processed]
               @min = oldest.positive? ? ((oldest.to_f / tip) * 100) : 0
-              @max = newest.positive? ? ((1 - (newest.to_f / tip)) * 100) : 0
+              @max = newest.positive? ? ((1 - (newest.to_f / tip)) * 100) : 100
             end
 
             def view_template
