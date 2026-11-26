@@ -47,6 +47,8 @@ module Sourced
           @short = short_names(@links.flat_map(&:crossings).map(&:name).uniq)
           @labels = @links.to_h { [it.id, label_lines(it)] }
           @layout = layout
+          @paths = @links.to_h { [it.id, path_of(@layout.routes.fetch(it.id))] }
+          @placed = place_labels
         end
 
         def empty? = @links.empty?
@@ -54,11 +56,14 @@ module Sourced
         def view_template
           return if empty?
 
-          w = (@layout.width + MARGIN * 2).ceil
+          # Labels may reach past the boxes, beside a line on the edge.
+          x1 = [0, *@placed.values.map { it[:x] }].min - MARGIN
+          x2 = [@layout.width, *@placed.values.map { it[:x] + it[:w] }].max + MARGIN
+          w = (x2 - x1).ceil
           h = (@layout.height + MARGIN * 2).ceil
           svg(
             class: 'boundary-map',
-            viewBox: "#{-MARGIN} #{-MARGIN} #{w} #{h}",
+            viewBox: "#{f x1} #{-MARGIN} #{w} #{h}",
             width: w,
             height: h,
             style: "--bm-w: #{w}px",
@@ -88,11 +93,14 @@ module Sourced
         def layout
           nodes = @reactors.map { LayeredLayout::Node.new(id: it.group_id, w: BOX_W, h: BOX_H, extra: 0, round: false) }
           edges = @links.map do |link|
-            lines = @labels.fetch(link.id)
-            LayeredLayout::Edge.new(id: link.id, from: link.from, to: link.to,
-                                    label_w: (lines.map(&:length).max * LABEL_CHAR_W).ceil, label_h: lines.size * LINE_H)
+            # No width for labels: they're placed once the lines are drawn
+            # (#place_labels), so lines run as directly as they would bare.
+            # Their height, so the gaps have room for them.
+            lines = @labels.fetch(link.id).size
+            LayeredLayout::Edge.new(id: link.id, from: link.from, to: link.to, label_w: lines.zero? ? 0 : SLOT_W,
+                                    label_h: (lines * LINE_H * GAP_ROOM).ceil)
           end
-          LayeredLayout.new(nodes, edges, starts: starts)
+          LayeredLayout.new(nodes, edges, starts:)
         end
 
         # Every reactor nothing crosses into, then one of each group of
@@ -155,43 +163,133 @@ module Sourced
           lines.join("\n")
         end
 
+        def path_of(route) = route.flat == :straight ? straight(route.points) : EdgePath.spline(route.points)
+
         def draw_line(s, link)
-          route = @layout.routes.fetch(link.id)
-          d = route.flat == :straight ? straight(route.points) : EdgePath.spline(route.points)
+          d = @paths.fetch(link.id)
           s.path(d:, class: "boundary-map__edge boundary-map__edge--#{link.kind}", data: { ends: "#{link.from} #{link.to}" },
-                 'marker-end': "url(##{@arrow}-#{link.kind})")
+                 'marker-end': "url(##{@arrow}-#{link.kind})") do
+            s.title { messages_title(link) }
+          end
         end
+
+        def messages_title(link) = link.crossings.map { "#{it.name} (#{it.relation})" }.join("\n")
 
         def straight(((x1, y1), (x2, y2))) = "M #{f x1} #{f y1} L #{f x2} #{f y2}"
 
-        # Lines stacked from the route's label point: down from it, but up
-        # from it above a straight arrow, so the last line stays clear of it.
         def draw_label(s, link)
-          route = @layout.routes.fetch(link.id)
-          return unless route.label
+          spot = @placed[link.id] or return
 
           lines = @labels.fetch(link.id)
-          x, y = route.label
-          top = case route.flat
-                in :straight then y - (lines.size - 1) * LINE_H
-                in :under then y - lines.size * LINE_H + LINE_H - 2
-                else y - (lines.size - 1) * LINE_H / 2.0
-                end
-          s.text(class: "boundary-map__label boundary-map__label--#{link.kind}", 'text-anchor': route.anchor,
+          x = spot[:anchor] == 'end' ? spot[:x] + spot[:w] : spot[:x]
+          s.text(class: "boundary-map__label boundary-map__label--#{link.kind}", 'text-anchor': spot[:anchor],
                  data: { ends: "#{link.from} #{link.to}" }) do
-            s.title { link.crossings.map { "#{it.name} (#{it.relation})" }.join("\n") }
+            s.title { messages_title(link) }
             lines.each_with_index do |line, i|
-              s.tspan(x: f(x), y: f(top + i * LINE_H)) { line }
+              s.tspan(x: f(x), y: f(spot[:y] + LINE_H - 3 + i * LINE_H)) { line }
             end
           end
         end
 
+        LABEL_GAP = 5   # between a line and its label
+        SLOT_W = 28     # room beside a labelled line, so labelled lines spread a little
+        GAP_ROOM = 2.5  # gaps this many labels tall, so labels can stagger down them
+        CLEARANCE = 3   # around labels and boxes, kept free of other labels
+        SLIDES = [0, 16, 32].freeze # how far out from its line a label may go, when there's no room by it
+
+        # Each label beside its own line, where it overlaps no box and no other
+        # label: the spot nearest the middle of the line's run down between
+        # its boxes, on its right if there's room, else its left; failing
+        # those, a little further out (SLIDES). The most lines first, they're
+        # hardest to fit. A label with no free spot goes where it covers least.
+        #
+        # @return [Hash{String => Hash}] link id => {x:, y:, w:, h:, anchor:}, its box's top left
+        def place_labels
+          taken = @layout.boxes.values.map { [it.x, it.y, it.x + BOX_W, it.y + BOX_H] }
+          labelled = @links.select { @labels.fetch(it.id).any? }
+          labelled.sort_by { -@labels.fetch(it.id).size }.to_h do |link|
+            lines = @labels.fetch(link.id)
+            w = lines.map(&:length).max * LABEL_CHAR_W
+            h = lines.size * LINE_H
+            points = candidates(@paths.fetch(link.id))
+            # Right beside the line first; then further out, still on its side.
+            spots = SLIDES.flat_map do |out|
+              points.flat_map do |px, py|
+                [[px + LABEL_GAP + out, py - h / 2.0, 'start'], [px - LABEL_GAP - out - w, py - h / 2.0, 'end']]
+              end
+            end
+            free = spots.find { |x, y, _| taken.none? { overlap?(it, [x, y, x + w, y + h]) } }
+            # None free: where it covers least of what's there.
+            free ||= spots.min_by { |x, y, _| taken.sum { overlap_area(it, [x, y, x + w, y + h]) } }
+            x, y, anchor = free || [0, 0, 'start']
+            taken << [x, y, x + w, y + h]
+            [link.id, { x:, y:, w:, h:, anchor: }]
+          end
+        end
+
+        # Points along a path's run between its boxes, the middle first, then
+        # out towards its ends.
+        def candidates(d)
+          points = sample(d)
+          return points if points.size < 3
+
+          # Labels keep off the boxes themselves (#place_labels), so any point
+          # down the run will do.
+          ys = points.map(&:last)
+          middle = (ys.min + ys.max) / 2.0
+          points.sort_by { (it[1] - middle).abs }
+        end
+
+        STEP = 1.5 # pixels between the points tried along a line
+
+        # Points every STEP pixels or so along an SVG path of M, L and C commands.
+        def sample(d)
+          points = []
+          at = nil
+          d.scan(/([MLC])([^MLC]*)/).each do |cmd, args|
+            nums = args.scan(/-?\d+(?:\.\d+)?/).map(&:to_f).each_slice(2).to_a
+            case cmd
+            in 'M' then at = nums.first
+            in 'L'
+              nums.each do |to|
+                n = [(Math.hypot(to[0] - at[0], to[1] - at[1]) / STEP).ceil, 1].max
+                points.concat((1..n).map { |i| t = i.fdiv(n); [at[0] + (to[0] - at[0]) * t, at[1] + (to[1] - at[1]) * t] })
+                at = to
+              end
+            in 'C'
+              nums.each_slice(3) do |c1, c2, to|
+                # The control polygon is at least as long as the curve.
+                n = [[at, c1, c2, to].each_cons(2).sum { |p, q| Math.hypot(q[0] - p[0], q[1] - p[1]) }.fdiv(STEP).ceil, 1].max
+                points.concat((1..n).map { |i| bezier(at, c1, c2, to, i.fdiv(n)) })
+                at = to
+              end
+            end
+          end
+          points
+        end
+
+        def bezier(p0, p1, p2, p3, t)
+          u = 1 - t
+          [0, 1].map { |k| u**3 * p0[k] + 3 * u**2 * t * p1[k] + 3 * u * t**2 * p2[k] + t**3 * p3[k] }
+        end
+
+        def overlap_area((ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2))
+          [[ax2, bx2].min - [ax1, bx1].max + CLEARANCE, 0].max * [[ay2, by2].min - [ay1, by1].max + CLEARANCE, 0].max
+        end
+
+        def overlap?((ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2))
+          ax1 < bx2 + CLEARANCE && bx1 < ax2 + CLEARANCE && ay1 < by2 + CLEARANCE && by1 < ay2 + CLEARANCE
+        end
+
         # A line for each message, at most MAX_LINES: past that, the first
-        # two and how many more. A projection's, one line.
+        # two and how many more. Reads go unlabelled: there are many, and a
+        # label slot each crowds the gaps they cross, pushing other lines'
+        # labels, and so their lines, aside. Their messages are in the
+        # line's tooltip, and the table.
         def label_lines(link)
+          return [] if link.kind == :projection
+
           names = link.crossings.map { @short.fetch(it.name) }.uniq
-          # Reads are many, and say least: just how many.
-          return [names.size == 1 ? names.first : "#{names.size} events"] if link.kind == :projection
 
           names = names.first(MAX_LINES - 1) + ["+#{names.size - MAX_LINES + 1} more"] if names.size > MAX_LINES
           names

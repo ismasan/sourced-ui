@@ -125,3 +125,43 @@ RSpec.describe Sourced::UI::Dashboard::Components::TopologyPage do
     expect(render([SpecLight])).to include('No messages cross between the registered reactors')
   end
 end
+
+RSpec.describe Sourced::UI::Components::BoundaryMap, 'around a hub' do
+  # A reactor appending events that five others react to, each dispatching
+  # commands back, and four read models reading its events: one gap crossed
+  # by many lines, half of them labelled. Laid out with a slot per label in
+  # the gap, the labels pushed lines out past their ends, up to 160px.
+  let(:boundaries) do
+    node = ->(type, id, group, **rest) { { type:, id:, name: "Hub::#{id.split('.').last}", group_id: group, group_label: group, produces: [], **rest } }
+    topology = (1..5).flat_map do |n|
+      events = (1..2).map { "hub.Spoke#{n}Outcome#{it}Recorded" }
+      commands = (1..2).map { "hub.RecordSpoke#{n}Outcome#{it}" }
+      commands.zip(events).flat_map { |c, e| [node.('command', c, 'hub', produces: [e]), node.('event', e, 'hub')] } +
+        [node.('automation', "spoke#{n}-aut", "spoke#{n}", consumes: events, produces: commands), node.('command', "spoke#{n}.Handle", "spoke#{n}")]
+    end
+    events = topology.select { it[:type] == 'event' }.map { it[:id] }.first(3)
+    topology += (1..4).map { { type: 'readmodel', id: "list#{it}-rm", name: "list#{it}", group_id: "list#{it}", group_label: "list#{it}", consumes: events, produces: [] } }
+    Sourced::UI::Boundaries.build(topology)
+  end
+  let(:map) { described_class.new(boundaries) }
+
+  def rect(spot) = [spot[:x], spot[:y], spot[:x] + spot[:w], spot[:y] + spot[:h]]
+  def overlap?((ax1, ay1, ax2, ay2), (bx1, by1, bx2, by2)) = ax1 < bx2 && bx1 < ax2 && ay1 < by2 && by1 < ay2
+
+  it 'places every label clear of the others and of the boxes' do
+    placed = map.instance_variable_get(:@placed).values.map { rect(it) }
+    boxes = map.instance_variable_get(:@layout).boxes.values.map { [it.x, it.y, it.x + described_class::BOX_W, it.y + described_class::BOX_H] }
+
+    expect(placed.size).to eq(10)
+    expect(placed.combination(2).count { |a, b| overlap?(a, b) }).to eq(0)
+    expect(placed.product(boxes).count { |a, b| overlap?(a, b) }).to eq(0)
+  end
+
+  it 'runs each line within the span of its ends, not out to a label and back' do
+    map.instance_variable_get(:@layout).routes.each_value do |route|
+      xs = route.points.map(&:first)
+      lo, hi = [xs.first, xs.last].minmax
+      expect(xs).to all(be_between(lo - 4, hi + 4))
+    end
+  end
+end
