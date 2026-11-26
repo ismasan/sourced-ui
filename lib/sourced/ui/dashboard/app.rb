@@ -11,6 +11,8 @@ require 'sourced/ui/dashboard/components/system_page'
 require 'sourced/ui/dashboard/components/message_page'
 require 'sourced/ui/dashboard/components/events_tree'
 require 'sourced/ui/dashboard/components/topology_page'
+require 'sourced/ui/dashboard/components/topology_map_page'
+require 'sourced/ui/dashboard/components/boundary_maps'
 require 'sourced/ui/dashboard/components/offsets_page'
 require 'sourced/ui/dashboard/components/reactor_page'
 require 'sourced/ui/dashboard/components/machine_instance_page'
@@ -31,6 +33,9 @@ module Sourced
       # accepts; a click on a card a moment stale is refused with a 409.
       class Service < Sidereal::App
         session secret: ENV.fetch('SOURCED_DASHBOARD_SESSION_SECRET') { 'x' * 64 }
+
+        # Its pan and zoom script, which the layout links.
+        component Components::BoundaryMaps
 
         handle ConsumerGroupMachine::Start do |cmd|
           refusing_invalid_transitions { Sourced.start_consumer_group(cmd.payload.group_id) }
@@ -154,6 +159,18 @@ module Sourced
           groups = store.stats.groups
           result = store.read_offsets(limit: per_page, from_id: from_id, group_id: group_id)
           component(Components::OffsetsPage.new(result:, groups:, selected_group: group_id))
+        end
+
+        # The boundaries map filling the window. ?grouped=true starts by
+        # namespace; ?reads=true or false starts with reads shown or not.
+        get '/topology/map' do
+          reactors = Sourced.router.reactors
+          flag = ->(name) { { 'true' => true, 'false' => false }[request.params[name]] }
+          component(Components::TopologyMapPage.new(
+            boundaries: Sourced::UI::Boundaries.build(Sourced.topology, reactors),
+            grouped: flag.('grouped') || false,
+            projections: flag.('reads')
+          ))
         end
 
         get '/topology' do

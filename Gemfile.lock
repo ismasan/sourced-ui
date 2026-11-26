@@ -8,7 +8,7 @@ GIT
 
 GIT
   remote: https://github.com/ismasan/sidereal.git
-  revision: 5b4f5c2d3c7c009863ec06677122b7073aea6fad
+  revision: 35fc22bfb34b1f3a8638701c93738b2057ce7f46
   specs:
     sidereal (0.1.0)
       async

@@ -2174,3 +2174,77 @@ a.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--t
 .reactor-pill--projector { border-left-color: var(--em-readmodel-stroke); }
 .boundary-map__node--namespace .boundary-map__box { stroke: var(--slate-400); stroke-width: 1.5; }
 .boundary-map__node--namespace .boundary-map__stripe { fill: var(--slate-700); }
+
+/* The boundaries map filling the window (/topology/map), to pan and zoom */
+.chart-card__expand {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--teal-700);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.chart-card__expand:hover { text-decoration: underline; }
+
+.topology-full {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--slate-50);
+  background-image: radial-gradient(var(--slate-200) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+.topology-full__bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  padding: 0.6rem 1rem;
+  background: white;
+  border-bottom: 1px solid var(--slate-200);
+  font-size: 13px;
+
+  strong { color: var(--slate-800); }
+}
+.topology-full__back { color: var(--teal-700); text-decoration: none; font-weight: 500; }
+.topology-full__back:hover { text-decoration: underline; }
+.topology-full__hint { font-size: 12px; }
+.topology-full__canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+
+  .boundary-map {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+  .boundary-map.is-panning { cursor: grabbing; }
+  .boundary-map.is-panning .boundary-map__link { cursor: grabbing; }
+  .topology__none { padding: 2rem; }
+}
+
+.zoom-controls {
+  display: inline-flex;
+  border: 1px solid var(--slate-200);
+  border-radius: 6px;
+  overflow: hidden;
+
+  button {
+    padding: 0.25rem 0.6rem;
+    border: 0;
+    border-left: 1px solid var(--slate-200);
+    background: white;
+    font: inherit;
+    font-size: 12px;
+    color: var(--slate-700);
+    cursor: pointer;
+  }
+  button:first-child { border-left: 0; }
+  button:hover { background: var(--slate-50); color: var(--teal-700); }
+}

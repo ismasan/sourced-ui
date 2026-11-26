@@ -203,3 +203,44 @@ RSpec.describe Sourced::UI::Boundaries::Grouped do
     expect(html.scan(/<marker id="bm-arrow-ns-all/).size).to eq(3)
   end
 end
+
+RSpec.describe Sourced::UI::Dashboard::Components::TopologyMapPage do
+  let(:boundaries) { Sourced::UI::Boundaries.build(Sourced::Topology.build(SpecShop::REACTORS), SpecShop::REACTORS) }
+
+  def render(**options)
+    context = Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology/map'))
+    described_class.new(boundaries:, **options).call(context:)
+  end
+
+  it 'fills the window with the map, to pan and zoom, and its controls' do
+    html = render
+    expect(html).to include('class="topology-full"', 'data-pan-zoom',
+                            'data-zoom="fit"', 'data-fullscreen', 'href="/topology"')
+    # Reactors with reads and without; by namespace, all inside one.
+    expect(html.scan('class="topology-full__canvas"').size).to eq(3)
+  end
+
+  it 'starts with the switches as given' do
+    html = render(grouped: true, projections: false)
+    expect(html).to include('{&quot;projections&quot;:false,&quot;grouped&quot;:true}')
+    # The namespace view shows; the reactor maps start hidden.
+    expect(html).to match(/topology-full__canvas" style="display: none" data-show="!\$grouped && \$projections"/)
+  end
+end
+
+RSpec.describe Sourced::UI::Dashboard::Components::BoundaryMaps do
+  it 'declares its pan and zoom script, from the file beside it' do
+    script = described_class.assets.find { it.name == 'topology/boundary_map.js' }
+    expect(script).to have_attributes(kind: :js, path: File.expand_path('../../../lib/sourced/ui/dashboard/components/boundary_map.js', __dir__))
+    expect(File).to exist(script.path)
+  end
+
+  it 'links the card to the full screen map, as its switches are set' do
+    boundaries = Sourced::UI::Boundaries.build(Sourced::Topology.build(SpecShop::REACTORS), SpecShop::REACTORS)
+    context = Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology'))
+    html = described_class.new(boundaries:).call(context:)
+    expect(html).to include('href="/topology/map?grouped=false&reads=true"',
+                            %(data-effect="el.href = '/topology/map?grouped=' + $grouped + '&reads=' + $projections"))
+    expect(html).not_to include('data-attr:href')
+  end
+end
