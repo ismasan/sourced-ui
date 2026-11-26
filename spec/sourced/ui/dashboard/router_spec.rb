@@ -568,6 +568,25 @@ RSpec.describe Sourced::UI::Dashboard::App do
     end
   end
 
+  describe 'navigation' do
+    def current_links = last_response.body.scan(%r{<a [^>]*aria-current="page"[^>]*>([^<]+)</a>}).flatten
+
+    {
+      '/' => 'System',
+      '/reactors/test_projector' => 'System',
+      '/log' => 'Log',
+      '/topology' => 'Topology',
+      '/topology/map' => 'Topology',
+      '/offsets' => 'Offsets'
+    }.each do |path, section|
+      it "marks #{section} as the current page at #{path}" do
+        get path
+        expect(last_response.status).to eq(200)
+        expect(current_links).to eq([section])
+      end
+    end
+  end
+
   describe 'GET /nonexistent' do
     it 'returns 404' do
       get '/nonexistent'

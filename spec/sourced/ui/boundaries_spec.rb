@@ -121,7 +121,7 @@ require 'sourced/ui/dashboard'
 
 RSpec.describe Sourced::UI::Dashboard::Components::TopologyPage do
   def render(reactors)
-    context = Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology'))
+    context = Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path, :path_info).new({}, '/topology', '/topology'))
     described_class.new(boundaries: Sourced::UI::Boundaries.build(Sourced::Topology.build(reactors), reactors)).call(context:)
   end
 
@@ -217,7 +217,7 @@ RSpec.describe Sourced::UI::Dashboard::Components::TopologyMapPage do
   let(:boundaries) { Sourced::UI::Boundaries.build(Sourced::Topology.build(SpecShop::REACTORS), SpecShop::REACTORS) }
 
   def render(**options)
-    context = Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology/map'))
+    context = Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path, :path_info).new({}, '/topology/map', '/topology/map'))
     described_class.new(boundaries:, **options).call(context:)
   end
 
@@ -246,7 +246,7 @@ RSpec.describe Sourced::UI::Dashboard::Components::BoundaryMaps do
 
   it 'links the card to the full screen map, as its switches are set' do
     boundaries = Sourced::UI::Boundaries.build(Sourced::Topology.build(SpecShop::REACTORS), SpecShop::REACTORS)
-    context = Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology'))
+    context = Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path, :path_info).new({}, '/topology', '/topology'))
     html = described_class.new(boundaries:).call(context:)
     expect(html).to include('href="/topology/map?grouped=false&reads=true"',
                             %(data-effect="el.href = '/topology/map?grouped=' + $grouped + '&reads=' + $projections"))
@@ -257,7 +257,7 @@ end
 RSpec.describe Sourced::UI::Dashboard::Components::ReactorPanel do
   let(:topology) { Sourced::Topology.build(SpecShop::REACTORS) }
   let(:boundaries) { Sourced::UI::Boundaries.build(topology, SpecShop::REACTORS) }
-  let(:context) { Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology/map')) }
+  let(:context) { Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path, :path_info).new({}, '/topology/map', '/topology/map')) }
 
   def render(group_id) = described_class.new(boundaries:, group_id:, topology:, reactors: SpecShop::REACTORS).call(context:)
 
@@ -303,7 +303,7 @@ end
 
 RSpec.describe Sourced::UI::Dashboard::Components::BoundaryMaps, 'full screen' do
   let(:boundaries) { Sourced::UI::Boundaries.build(Sourced::Topology.build(SpecShop::REACTORS), SpecShop::REACTORS) }
-  let(:context) { Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/topology/map')) }
+  let(:context) { Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path, :path_info).new({}, '/topology/map', '/topology/map')) }
 
   it 'has a click on a box open its panel, rather than its page, and light it' do
     html = described_class.new(boundaries:, full: true).call(context:)

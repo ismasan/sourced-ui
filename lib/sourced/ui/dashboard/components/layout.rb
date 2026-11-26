@@ -21,6 +21,16 @@ module Sourced
 
           NULL_PAGE = NullPage.new
 
+          # The dashboard's sections, as the nav links them: label, path, and
+          # the path prefixes of the pages within each (a reactor's pages are
+          # reached from System, a message's from Log).
+          SECTIONS = [
+            ['System', '/', %w[/reactors]],
+            ['Log', '/log', %w[/log /events]],
+            ['Topology', '/topology', %w[/topology]],
+            ['Offsets', '/offsets', %w[/offsets]]
+          ].freeze
+
           def initialize(title: 'Sourced Dashboard')
             super(NULL_PAGE)
             @title = title
@@ -52,10 +62,9 @@ module Sourced
                   end
 
                   div class: 'link-group dashboard' do
-                    a(href: helpers.url('/')) { 'System' }
-                    a(href: helpers.url('/log')) { 'Log' }
-                    a(href: helpers.url('/topology')) { 'Topology' }
-                    a(href: helpers.url('/offsets')) { 'Offsets' }
+                    SECTIONS.each do |label, path, _|
+                      a(href: helpers.url(path), aria: { current: ('page' if label == current_section) }) { label }
+                    end
                   end
                 end
 
@@ -71,6 +80,17 @@ module Sourced
           private
 
           def helpers = context
+
+          # The label of the section the current page is in, which the nav
+          # marks as the current page; nil when it's in none.
+          def current_section
+            path = helpers.request.path_info
+            return 'System' if path.empty? || path == '/'
+
+            SECTIONS.find do |_, _, prefixes|
+              prefixes.any? { |prefix| path == prefix || path.start_with?("#{prefix}/") }
+            end&.first
+          end
 
           # The dashboard's SSE routes stream their own updates, so it never
           # opens a page stream. Answering nil here, instead of letting

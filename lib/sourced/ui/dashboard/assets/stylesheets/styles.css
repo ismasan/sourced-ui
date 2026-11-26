@@ -83,6 +83,14 @@ body {
     a:hover {
       text-decoration: underline;
     }
+    /* The section the open page is in: bright, and underlined in the
+       accent colour, flush with the bottom of the bar. */
+    a[aria-current="page"] {
+      color: white;
+      text-decoration: none;
+      box-shadow: inset 0 -2px 0 var(--teal-400);
+      padding-bottom: 0.3rem;
+    }
     .logout {
       color: var(--slate-400);
     }
