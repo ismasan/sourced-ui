@@ -107,6 +107,41 @@ RSpec.describe Sourced::UI::LayeredLayout do
     expect(lone.boxes.fetch(:z).y).to be > lone.boxes.fetch(:a).y
   end
 
+  it 'points an edge up only where it closes a cycle' do
+    # Breadth first reaches f straight from s, a rank above b, which also goes there.
+    layout = described_class.new(%i[s a b f].map { node(it) }, [edge(0, :s, :a), edge(1, :s, :f), edge(2, :a, :b), edge(3, :b, :f)],
+                                 starts: [:s])
+    ys = layout.boxes.transform_values(&:y)
+
+    expect(ys[:f]).to be > ys[:b]
+  end
+
+  it 'runs a long edge straight down past the ranks it skips' do
+    layout = described_class.new(%i[a b c d].map { node(it) }, [edge(0, :a, :b), edge(1, :b, :c), edge(2, :c, :d), edge(3, :a, :d, 'Far')],
+                                 starts: [:a])
+    _, *through, _ = layout.routes.fetch(3).points
+
+    expect(through.map(&:first).uniq.size).to eq(1)
+  end
+
+  it 'puts the bottoms below everything' do
+    layout = described_class.new([node(:a), node(:b), node(:out, 2)], [edge(0, :a, :out), edge(1, :a, :b)], starts: [:a], bottoms: [:out])
+
+    expect(layout.boxes.fetch(:out).y).to be > layout.boxes.fetch(:b).y
+  end
+
+  it 'meets an end where the edge fixes it, and spreads the others around it' do
+    edges = [described_class::Edge.new(id: 0, from: :a, to: :b, label_w: 12, label_h: 12, from_dx: 20),
+             edge(1, :a, :c)]
+    layout = described_class.new(%i[a b c].map { node(it) }, edges, starts: [:a])
+    a = layout.boxes.fetch(:a)
+    fixed = layout.routes.fetch(0).points.first
+    other = layout.routes.fetch(1).points.first
+
+    expect(fixed).to eq([a.x + 20, a.y + 30])
+    expect((other[0] - fixed[0]).abs).to be >= described_class::PORT_GAP
+  end
+
   it 'refuses a self-loop' do
     expect { described_class.new([node(:a)], [edge(0, :a, :a)]) }.to raise_error(ArgumentError, /loops to itself/)
   end

@@ -18,7 +18,10 @@ module Sourced
       #
       # A transition belongs to the innermost region holding both its ends: one
       # from a checkpoint nested in a compound checkpoint to that checkpoint's
-      # sibling (a part's on_final) leaves through the compound's border, and one
+      # sibling (a part's on_final) leaves through a port in the compound's
+      # border, laid out inside it up to the port and outside it from there
+      # (see Placement; the regions are laid out twice, the second time with
+      # each region's ports in the order of where their edges go). One
       # from a checkpoint into a region of its own drops in from the region's
       # top, from an entry point laid out alongside the region's start. One
       # between the regions of a parallel checkpoint has no region to be laid
@@ -45,7 +48,6 @@ module Sourced
         ARC_MIN = 16       # how far the shortest arc over or under a row reaches
         EDGE_CHAR_W = 6.0  # the same, for arrow labels
         LABEL_H = 12
-        UPRIGHT = 4.0      # how much more an edge's ends lean upright than its first and last stretches
         MARGIN = 8         # around everything drawn
         ACTION_H = 14      # a line of a checkpoint's entry and exit actions
         ACTION_TOP = 4     # room above its first one, under the checkpoint's name
@@ -67,8 +69,20 @@ module Sourced
         # An edge laid out in a region, between the region's children holding its ends.
         # An edge into the region from the checkpoint it belongs to comes +from+ an
         # Entry: a point at the region's top.
-        Placement = Data.define(:edge, :from, :to)
+        #
+        # An edge between a checkpoint nested in a compound or parallel one and
+        # one outside it crosses its border at a Port, as Pele (pele.run) lays
+        # out its groups: it's laid out in pieces, a region at a time, one in
+        # each region it crosses, each piece inside a region from or to a port
+        # at the region's top or bottom (whichever faces where the edge goes
+        # on), and the piece outside meeting the border right there
+        # (+from_port+, +to_port+: the port inside its +from+ or +to+).
+        Placement = Data.define(:edge, :from, :to, :from_port, :to_port) do
+          def initialize(from_port: nil, to_port: nil, **) = super
+          def port_leg? = Port === from || Port === to
+        end
         Entry = Data.define(:index)
+        Port = Data.define(:serial)
 
         ROOT = [:root].freeze
 
@@ -96,17 +110,28 @@ module Sourced
           @loops = []
           @direct = []
           (collect_edges(@chart) + escalation_edges).each { assign(it) }
+          @ports = 0
+          @port_side = {}   # Port => :top or :bottom of its region
+          @port_region = {} # Port => the region Box it's laid out in
+          add_ports
           # Laid out by what's drawn: after history and re-entry targets resolve.
           @loops_on = @loops.group_by(&:from)
         end
 
         def view_template
+          plan_ports(@chart, ROOT)
+          @port_hint = {}
           root = layout_region(@chart, ROOT, :root)
           place(root, 0, 0)
-
-          drawings = regions(root).flat_map do |region|
-            region.edges.map { |placement, route| [placement.edge, routed(region, placement, route)] }
+          if @ports.positive?
+            # Again, with each region's ports in the order of where their
+            # edges go outside it, so they don't cross on the way there.
+            @port_hint = port_hints(root)
+            root = layout_region(@chart, ROOT, :root)
+            place(root, 0, 0)
           end
+
+          drawings = stitched(regions(root).flat_map { |region| region.edges.map { |placement, route| [placement, region, route] } })
           @loops_on.each do |id, loops|
             loops.each_with_index { |edge, i| drawings << [edge, self_loop(@boxes.fetch(id), i, loops.size)] }
           end
@@ -200,29 +225,130 @@ module Sourced
           @direct << edge
         end
 
+        # An edge from or to a checkpoint nested deeper than the children its
+        # region holds gets a piece in each region between, through a Port.
+        def add_ports
+          @placed.keys.each do |key|
+            @placed[key].map! do |p|
+              next p if Entry === p.from || p.port_leg?
+
+              from_port = port_legs(p.edge, p.edge.from, key, :out) if p.edge.from != p.from
+              to_port = port_legs(p.edge, p.edge.to, key, :in) if p.edge.to != p.to
+              p.with(from_port:, to_port:)
+            end
+          end
+        end
+
+        # The pieces of +edge+ inside the regions between +id+ (an end of it)
+        # and the region +key+, the innermost first, each from (+:out+) or to
+        # (+:in+) a port of its own. Returns the outermost port.
+        def port_legs(edge, id, key, way)
+          inner = nil
+          lineage(id).take_while { |k, _| k != key }.each do |k, child|
+            port = Port.new(serial: @ports += 1)
+            @placed[k] << if way == :out
+                            Placement.new(edge:, from: child, to: port, from_port: inner)
+                          else
+                            Placement.new(edge:, from: port, to: child, to_port: inner)
+                          end
+            inner = port
+          end
+          inner
+        end
+
+        # Which side of its region each port goes on: the one facing where the
+        # edge goes on, in the region outside, by the ranks there; so each
+        # region's ranks first, outermost first. Ranks depend on the graph
+        # alone, so they're known before any sizes.
+        def plan_ports(region, key)
+          placements = ordered(key)
+          ids, edges, options = rank_input(region, placements)
+          ranks = LayeredLayout.ranks(ids, edges, **options)
+          placements.each do |p|
+            @port_side[p.from_port] = ranks.fetch(p.from) <= ranks.fetch(p.to) ? :bottom : :top if p.from_port
+            @port_side[p.to_port] = ranks.fetch(p.from) < ranks.fetch(p.to) ? :top : :bottom if p.to_port
+          end
+          region[:states].each_value do |state|
+            case state[:type]
+            in 'parallel' then regions_of(state).each { plan_ports(it, [:region, it[:id]]) }
+            in 'compound' then plan_ports(state, [:compound, state[:id]])
+            else nil
+            end
+          end
+        end
+
+        # A region's placements: joins first, so ranks follow the main path,
+        # then commands in definition order.
+        def ordered(key) = @placed[key].each_with_index.sort_by { |p, i| [p.edge.kind == :done ? 0 : 1, i] }.map(&:first)
+
+        # [ids, edges, options] for LayeredLayout.ranks, as #layout_region lays
+        # the region out.
+        def rank_input(region, placements)
+          entries = placements.map(&:from).grep(Entry)
+          ports = placements.flat_map { [it.from, it.to] }.grep(Port)
+          ids = region[:states].values.map { it[:id] } + entries + ports
+          [ids, placements.map { [it.from, it.to] },
+           { starts: [region[:initial]], tops: entries + ports.select { @port_side.fetch(it) == :top },
+             bottoms: ports.select { @port_side.fetch(it) == :bottom } }]
+        end
+
         # ---- Layout: sizes, relative to each box's own origin ----
 
         def layout_region(region, key, kind)
           children = region[:states].values.map { |state| layout_node(state) }
-          # Joins first, so ranks follow the main path, then commands in definition order.
-          placements = @placed[key].each_with_index.sort_by { |p, i| [p.edge.kind == :done ? 0 : 1, i] }.map(&:first)
+          placements = ordered(key)
           nodes = children.map do |box|
             LayeredLayout::Node.new(id: box.data[:id], w: box.w, h: box.h, extra: box.extra.to_i,
                                     round: (box.kind in :initial | :history))
           end
-          entries = placements.map(&:from).grep(Entry)
-          nodes += entries.map { LayeredLayout::Node.new(id: it, w: 2, h: 2, extra: 0, round: true) }
+          ids, _, options = rank_input(region, placements)
+          nodes += ids.grep(Entry).map { LayeredLayout::Node.new(id: it, w: 2, h: 2, extra: 0, round: true) }
+          ports = ids.grep(Port)
+          nodes += ports.map { LayeredLayout::Node.new(id: it, w: 2, h: 2, extra: 0, round: true, hint: @port_hint[it]) }
           edges = placements.each_with_index.map do |p, i|
-            LayeredLayout::Edge.new(id: i, from: p.from, to: p.to, label_w: text_width(p.edge.label) + 4, label_h: LABEL_H)
+            # Only the piece between the edge's own region's children is labelled.
+            label_w = p.port_leg? ? 0 : text_width(p.edge.label) + 4
+            LayeredLayout::Edge.new(id: i, from: p.from, to: p.to, label_w:, label_h: p.port_leg? ? 0 : LABEL_H,
+                                    from_dx: p.from_port && port_dx(@boxes.fetch(p.from), p.from_port),
+                                    to_dx: p.to_port && port_dx(@boxes.fetch(p.to), p.to_port))
           end
-          layout = LayeredLayout.new(nodes, edges, starts: [region[:initial]], tops: entries)
+          layout = LayeredLayout.new(nodes, edges, **options)
 
           head = kind == :region ? REGION_HEAD : 0
           pad = kind == :region ? PAD : 0
           name_w = kind == :region ? region[:key].to_s.length * CHAR_W + 20 : 0
           Box.new(kind:, data: region, children:, layout:,
                   edges: placements.each_with_index.map { |p, i| [p, layout.routes.fetch(i)] },
-                  w: [layout.width + pad * 2, name_w].max, h: head + layout.height + pad * 2)
+                  w: [layout.width + pad * 2, name_w].max, h: head + layout.height + pad * 2).tap do |box|
+            ports.each { @port_region[it] = box }
+          end
+        end
+
+        # Port => how far across the edge through it heads, once out of the
+        # checkpoint it's in (where the piece outside turns to first), from
+        # the left of the layout of the region the port is in.
+        def port_hints(root)
+          regions(root).each_with_object({}) do |region, hints|
+            region.edges.each do |p, route|
+              points, = absolute(region, route)
+              hints[p.from_port] = points[1][0] - @port_region.fetch(p.from_port).origin[0] if p.from_port
+              hints[p.to_port] = points[-2][0] - @port_region.fetch(p.to_port).origin[0] if p.to_port
+            end
+          end
+        end
+
+        # How far from +owner+'s left (a compound or parallel checkpoint) its
+        # +port+ is, as #place places the regions inside it.
+        def port_dx(owner, port)
+          used = owner.children.sum(&:w) + GAP_X * [owner.children.size - 1, 0].max
+          col = (owner.w - used) / 2.0
+          region = @port_region.fetch(port)
+          owner.children.each do |child|
+            return col + (child.w - child.layout.width) / 2.0 + child.layout.boxes.fetch(port).x + 1 if child.equal?(region)
+
+            col += child.w + GAP_X
+          end
+          raise ArgumentError, "#{port.inspect} isn't inside #{owner.data[:id]}"
         end
 
         def layout_node(state)
@@ -585,12 +711,49 @@ module Sourced
           (key && @region_start.fetch(key)) || target
         end
 
+        # Each edge's drawing, from its +legs+ ([placement, region, route]):
+        # one laid out in pieces, through ports, is drawn as one line through
+        # every piece, its label the labelled piece's.
+        def stitched(legs)
+          from_port = {} # Port => the leg leaving it
+          after = {}     # Port => the leg leaving the checkpoint it's inside, there
+          legs.each do |leg|
+            p = leg[0]
+            from_port[p.from] = leg if Port === p.from
+            after[p.from_port] = leg if p.from_port
+          end
+          legs.filter_map do |leg|
+            p, region, route = leg
+            next if Port === p.from || p.from_port # carries on from another piece
+
+            chain = [leg]
+            while (q = chain.last[0])
+              nxt = if Port === q.to then after[q.to]
+                    elsif q.to_port then from_port[q.to_port]
+                    end
+              break unless nxt
+
+              chain << nxt
+            end
+            next [p.edge, routed(region, p, route)] if chain.size == 1
+
+            points = chain.flat_map { |_, r, rt| absolute(r, rt).first }
+            labelled = chain.find { |pl, _, _| !pl.port_leg? }
+            _, label = absolute(labelled[1], labelled[2])
+            [p.edge, [path(points, nil), [*label, labelled[2].anchor]]]
+          end
+        end
+
+        # A +route+ +region+ laid out, in the chart's coordinates: [points, label].
+        def absolute(region, route)
+          ox, oy = region.origin
+          [route.points.map { |x, y| [ox + x, oy + y] }, route.label && [ox + route.label[0], oy + route.label[1]]]
+        end
+
         # An edge its region laid out: the region's route, from and to the
         # children holding its ends, reaching on into them for ends nested deeper.
         def routed(region, placement, route)
-          ox, oy = region.origin
-          points = route.points.map { |x, y| [ox + x, oy + y] }
-          label = route.label && [ox + route.label[0], oy + route.label[1]]
+          points, label = absolute(region, route)
           edge = placement.edge
           flat = route.flat
           if Entry === placement.from
@@ -621,35 +784,56 @@ module Sourced
           end
         end
 
-        # A smooth curve through every point, as Bézier segments: through each
-        # point in between heading from the point before to the one after, so it
-        # sweeps rather than bending at each, and at its ends heading along its
-        # first and last stretches, so arrowheads point the way the line comes
-        # in. Ends lean upright (UPRIGHT), meeting boxes from above or below.
-        # Each segment's control points reach a third of its own length along
-        # those headings, so a short segment beside a long one doesn't
-        # overshoot, and stay level with the segment, so it never doubles back
-        # up or down.
+        # A curve through every point, the way Pele (pele.run) draws its
+        # layered edges: two points in line are joined by a straight run, and
+        # any other two by one S that leaves and arrives upright, so a line
+        # meets boxes square and never overshoots a bend. A point in between
+        # that its line passes on the way across (it lies between the points
+        # either side) is swept through, heading from the one before to the one
+        # after, rather than stepped; so is one it turns back at (the lowest
+        # point of a line under a rank). An S's handles reach half the way down
+        # (#ease), and a sweep's a third of its stretch; neither past the
+        # stretch's top or bottom, so it never doubles back up or down.
         def spline(points)
+          points = points.chunk_while { |p, q| (p[0] - q[0]).abs < 0.01 && (p[1] - q[1]).abs < 0.01 }.map(&:first)
+          return "M #{f points[0][0]} #{f points[0][1]}" if points.size < 2
+
           last = points.size - 1
-          headings = points.each_index.map do |i|
-            dx, dy = case i
-                     in 0 then [points[1][0] - points[0][0], (points[1][1] - points[0][1]) * UPRIGHT]
-                     in ^last then [points[last][0] - points[last - 1][0], (points[last][1] - points[last - 1][1]) * UPRIGHT]
-                     else [points[i + 1][0] - points[i - 1][0], points[i + 1][1] - points[i - 1][1]]
-                     end
-            length = Math.hypot(dx, dy)
-            length.zero? ? [0.0, 0.0] : [dx / length, dy / length]
+          # nil: upright. Else the unit heading it sweeps through on.
+          sweeps = points.each_index.map do |i|
+            next nil if i.zero? || i == last
+
+            (px, py), (x, y), (nx, ny) = points[i - 1], points[i], points[i + 1]
+            across = (x - px) * (nx - x) > 0.01
+            turns = (y - py) * (ny - y) < -0.01
+            next nil unless across || turns
+
+            length = Math.hypot(nx - px, ny - py)
+            [(nx - px) / length, (ny - py) / length]
           end
-          points.each_cons(2).with_index.reduce("M #{f points[0][0]} #{f points[0][1]}") do |d, (((x1, y1), (x2, y2)), i)|
-            reach = Math.hypot(x2 - x1, y2 - y1) / 3
-            (hx1, hy1), (hx2, hy2) = headings[i], headings[i + 1]
+          d = +"M #{f points[0][0]} #{f points[0][1]}"
+          points.each_cons(2).with_index do |((x1, y1), (x2, y2)), i|
+            if (x1 - x2).abs < 0.5 && !sweeps[i] && !sweeps[i + 1]
+              # Straight on: a point part way along a run adds nothing.
+              d << " L #{f x2} #{f y2}" unless i + 1 < last && !sweeps[i + 1] && (points[i + 2][0] - x2).abs < 0.5
+              next
+            end
+            dy = y2 - y1
+            s_reach = dy.abs * ease(x2 - x1, dy)
+            reach = Math.hypot(x2 - x1, dy) / 3
+            c1 = sweeps[i] ? [x1 + sweeps[i][0] * reach, y1 + sweeps[i][1] * reach] : [x1, y1 + (dy <=> 0) * s_reach]
+            c2 = sweeps[i + 1] ? [x2 - sweeps[i + 1][0] * reach, y2 - sweeps[i + 1][1] * reach] : [x2, y2 - (dy <=> 0) * s_reach]
             low, high = [y1, y2].minmax
-            c1y = (y1 + hy1 * reach).clamp(low, high)
-            c2y = (y2 - hy2 * reach).clamp(low, high)
-            d + " C #{f(x1 + hx1 * reach)} #{f c1y}, #{f(x2 - hx2 * reach)} #{f c2y}, #{f x2} #{f y2}"
+            d << " C #{f c1[0]} #{f c1[1].clamp(low, high)}, #{f c2[0]} #{f c2[1].clamp(low, high)}, #{f x2} #{f y2}"
           end
+          d
         end
+
+        # How far down an S's handles reach, as a share of how far it drops:
+        # half, for an even S, but less for one that runs far across, down to a
+        # quarter at sixteen times as far, so it crosses in a straighter line
+        # (Pele's +ease+).
+        def ease(across, along) = (4.0 * along.abs / [across.abs, 1].max).clamp(0.25, 0.5)
 
         # A +drawing+ is [path, [label x, label y, anchor]]. Its line and label
         # are drawn apart, each in a group with the edge's attributes.

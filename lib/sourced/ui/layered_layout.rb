@@ -4,10 +4,15 @@ module Sourced
   module UI
     # A layered (Sugiyama) layout of one flat directed graph, drawn top to
     # bottom. Components::Statechart lays out each region's states with it.
+    # Several ideas are Pele's (https://github.com/obsidianmd/pele,
+    # src/layout/layered.ts): cycles broken depth first, long edges run
+    # straight and turn only at their ends, and fixed border ports.
     #
     # 1. Ranks: breadth first from the +starts+, so most edges point down, with
-    #    the +tops+ in a rank of their own above them. A node nothing reaches
-    #    goes last.
+    #    the +tops+ in a rank of their own above them and the +bottoms+ in one
+    #    below everything. Then only the edges that close a cycle (found depth
+    #    first) point up: the target of any other moves down below its source.
+    #    A node nothing reaches goes last. (.ranks, which needs only the graph.)
     # 2. Layers: each rank is a layer of nodes, followed by a layer for labels.
     #    An edge between ranks runs through a dummy vertex in every layer
     #    between them, its label in the first label layer; an edge back up is
@@ -15,21 +20,31 @@ module Sourced
     #    dummy in the label layer below, unless its ends end up side by side:
     #    then it's drawn straight across, with room kept for its label.
     # 3. Order: barycenter sweeps, down and up, keeping the order with the
-    #    fewest crossings.
-    # 4. Coordinates: each node pulled towards its neighbours, and each dummy
-    #    towards the straight line between its edge's ends, a layer at a time,
-    #    the layer packed in order without overlaps (weighted isotonic
-    #    regression). Dummies pull harder, so edges bend only where they must.
+    #    fewest crossings. Nodes with a +hint+ keep the order of their hints.
+    # 4. Coordinates: each node pulled towards its neighbours, a layer at a
+    #    time, the layer packed in order without overlaps (weighted isotonic
+    #    regression). An edge's dummies start on the straight line between its
+    #    ends, then pull towards each other, so the edge runs straight down
+    #    past every rank it skips and bends only near its ends. Dummies pull
+    #    harder, so edges bend only where they must.
     # 5. Ports: the edges at a node's top or bottom spread along it, in the
-    #    order of where they go.
+    #    order of where they go, around any fixed there (+from_dx+, +to_dx+).
     #
     # Each label has a slot of its own, so labels don't overlap each other,
     # nodes, or other edges' lines.
     class LayeredLayout
       # +extra+ is room kept free to the node's right (for its self-loops).
-      # A +round+ node's edges all meet it at its middle.
-      Node = Data.define(:id, :w, :h, :extra, :round)
-      Edge = Data.define(:id, :from, :to, :label_w, :label_h)
+      # A +round+ node's edges all meet it at its middle. Nodes with a +hint+
+      # keep the order of their hints in their rank (a compound state's border
+      # ports, in the order of where their edges go outside it).
+      Node = Data.define(:id, :w, :h, :extra, :round, :hint) do
+        def initialize(hint: nil, **) = super
+      end
+      # +from_dx+ and +to_dx+, if given, fix where the edge meets its ends:
+      # that far from the node's left (a compound state's border port).
+      Edge = Data.define(:id, :from, :to, :label_w, :label_h, :from_dx, :to_dx) do
+        def initialize(from_dx: nil, to_dx: nil, **) = super
+      end
       # +points+ run from the edge's +from+ to its +to+. +flat+ is :straight or
       # :under for an edge within a rank, nil otherwise. +label+ is [x, y], and
       # +anchor+ its text-anchor.
@@ -75,13 +90,89 @@ module Sourced
         blocks.flat_map { |sum, weight, size| [sum / weight] * size }.each_with_index.map { |z, i| z + offsets[i] }
       end
 
+      # Each node's rank, from just the graph: +ids+, and +edges+ as [from, to]
+      # pairs. See #initialize for +starts+, +tops+ and +bottoms+.
+      def self.ranks(ids, edges, starts: [], tops: [], bottoms: [])
+        out = Hash.new { |h, k| h[k] = [] }
+        edges.each { |from, to| out[from] << to }
+        tops = tops.select { ids.include?(it) }
+        bottoms = bottoms.select { ids.include?(it) } - tops
+        rest = ids - tops - bottoms
+        firsts = (starts.select { rest.include?(it) }).then { it.empty? ? [rest.first].compact : it }
+        ranks = tops.to_h { [it, 0] }.merge(firsts.to_h { [it, tops.empty? ? 0 : 1] })
+        queue = tops + firsts
+        while (id = queue.shift)
+          out[id].each do |to|
+            next if ranks.key?(to) || bottoms.include?(to)
+
+            ranks[to] = ranks.fetch(id) + 1
+            queue << to
+          end
+        end
+        sink(ranks, out, tops + firsts, tops)
+        last = (ranks.values.max || -1) + 1
+        rest.each { ranks[it] ||= last }
+        below = (ranks.values.max || -1) + 1
+        bottoms.each { ranks[it] = below }
+        ranks
+      end
+
+      # Breadth first puts a node at its shortest way from the start, so an
+      # edge into it from further along points back up although it closes no
+      # cycle (+FailVerification+ into +failed+, reached sooner by
+      # +FailPreparation+). Only the edges that do close one, found depth first
+      # from +roots+ in definition order, point up: the target of any other
+      # edge pointing up moves down below its source, and on along its edges.
+      # The +fixed+ nodes stay where they are.
+      def self.sink(ranks, out, roots, fixed)
+        back = Set.new
+        state = {}
+        roots.each do |root|
+          next if state[root]
+
+          state[root] = :open
+          stack = [[root, out[root].each]]
+          until stack.empty?
+            id, targets = stack.last
+            begin
+              to = targets.next
+              case state[to]
+              in :open then back << [id, to]
+              in nil
+                state[to] = :open
+                stack << [to, out[to].each]
+              else nil
+              end
+            rescue StopIteration
+              state[id] = :done
+              stack.pop
+            end
+          end
+        end
+
+        loop do
+          moved = false
+          ranks.keys.each do |id|
+            out[id].each do |to|
+              next if !ranks.key?(to) || fixed.include?(to) || back.include?([id, to]) || ranks.fetch(to) >= ranks.fetch(id)
+
+              ranks[to] = ranks.fetch(id) + 1
+              moved = true
+            end
+          end
+          break unless moved
+        end
+      end
+      private_class_method :sink
+
       attr_reader :width, :height, :boxes, :routes
 
       # @param nodes [Array<Node>]
       # @param edges [Array<Edge>] none from a node to itself, and none without nodes
       # @param starts [Array] the nodes ranks start from (the first node, if none of them is one)
       # @param tops [Array] nodes above even those
-      def initialize(nodes, edges, starts: [], tops: [])
+      # @param bottoms [Array] nodes below all the others
+      def initialize(nodes, edges, starts: [], tops: [], bottoms: [])
         if nodes.empty?
           raise ArgumentError, 'edges need nodes to run between' if edges.any?
 
@@ -94,7 +185,7 @@ module Sourced
         @nodes = nodes
         @edges = edges
         @edges_by_id = edges.to_h { [it.id, it] }
-        build(rank(starts, tops))
+        build(LayeredLayout.ranks(nodes.map(&:id), edges.map { [it.from, it.to] }, starts:, tops:, bottoms:))
         order
         straighten_flat
         assign_y # first: heights don't depend on positions across, and dummies are placed by them
@@ -104,27 +195,6 @@ module Sourced
       end
 
       private
-
-      def rank(starts, tops)
-        out = Hash.new { |h, k| h[k] = [] }
-        @edges.each { out[it.from] << it.to }
-        ids = @nodes.map(&:id)
-        tops = tops.select { ids.include?(it) }
-        firsts = (starts.select { ids.include?(it) } - tops).then { it.empty? ? [(ids - tops).first].compact : it }
-        ranks = tops.to_h { [it, 0] }.merge(firsts.to_h { [it, tops.empty? ? 0 : 1] })
-        queue = tops + firsts
-        while (id = queue.shift)
-          out[id].each do |to|
-            next if ranks.key?(to)
-
-            ranks[to] = ranks.fetch(id) + 1
-            queue << to
-          end
-        end
-        last = ranks.values.max + 1
-        ids.each { ranks[it] ||= last }
-        ranks
-      end
 
       def build(ranks)
         @v = {}
@@ -164,10 +234,12 @@ module Sourced
         @layers = (0..rows.keys.max).map { rows[it] }
         # A dummy between ranks => [its edge's upper end, lower end].
         @along = {}.compare_by_identity
-        @chains.each_value do |upper, *mids, lower|
+        # A dummy between ranks => all of its edge's dummies.
+        @mates = {}.compare_by_identity
+        @chains.each do |id, (upper, *mids, lower)|
           next if upper.layer == lower.layer
 
-          mids.each { @along[it] = [upper, lower] }
+          mids.each { @along[it] = [upper, lower, id]; @mates[it] = mids }
         end
         @neighbours = Hash.new { |h, k| h[k] = [] }.compare_by_identity
         @chains.each_value { |chain| chain.each_cons(2) { |p, q| @neighbours[p] << q; @neighbours[q] << p } }
@@ -178,6 +250,7 @@ module Sourced
       end
 
       def order
+        @layers.map! { hinted(it) }
         best = @layers.map(&:dup)
         fewest = crossings(best)
         layers = @layers.map(&:dup)
@@ -186,10 +259,10 @@ module Sourced
           down = sweep.even?
           (down ? (1..last) : (last - 1).downto(0)).each do |l|
             ref = index(layers[down ? l - 1 : l + 1])
-            layers[l] = layers[l].each_with_index.sort_by do |v, i|
+            layers[l] = hinted(layers[l].each_with_index.sort_by do |v, i|
               at = @neighbours[v].filter_map { ref[it] }
               [at.empty? ? i : at.sum.fdiv(at.size), i]
-            end.map(&:first)
+            end.map(&:first))
           end
           count = crossings(layers)
           if count < fewest
@@ -201,6 +274,17 @@ module Sourced
       end
 
       def index(row) = row.each_with_index.to_h.compare_by_identity
+
+      # +row+ with its hinted nodes in the order of their hints, in the places
+      # they had between them.
+      def hinted(row)
+        slots = row.each_index.select { row[it].node&.hint }
+        return row if slots.size < 2
+
+        row = row.dup
+        slots.map { row[it] }.sort_by.with_index { |v, i| [v.node.hint, i] }.zip(slots).each { |v, i| row[i] = v }
+        row
+      end
 
       def crossings(layers)
         layers.each_cons(2).sum do |upper, lower|
@@ -217,6 +301,8 @@ module Sourced
         @flat_gap = {}.compare_by_identity # the left node of a pair => the gap to its right
         @flat.keys.each do |id|
           a, d, b = @chains.fetch(id)
+          next if fixed_dx(id, a) || fixed_dx(id, b) # meets a port on its top or bottom
+
           row = @layers[a.layer]
           i = row.index { it.equal?(a) }
           j = row.index { it.equal?(b) }
@@ -236,11 +322,19 @@ module Sourced
         PASSES.times do |pass|
           (pass.even? ? @layers : @layers.reverse).each do |row|
             targets = row.map do |v|
-              if (upper, lower = @along[v])
+              if pass.positive? && (mates = @mates[v])
+                # Where the rest of its edge's dummies are, so the edge runs
+                # straight down past every rank it skips and turns only at its
+                # ends: where one rank pushes a dummy aside (a wide node in the
+                # way), the others follow it there.
+                mates.sum(&:anchor).fdiv(mates.size) - v.anchor_dx
+              elsif (upper, lower, id = @along[v])
                 # Where the straight line between the edge's ends crosses the dummy's middle.
                 top = upper.y + upper.h
                 t = ((v.y + @layer_h.fetch(v.layer) / 2.0 - top) / (lower.y - top)).clamp(0.0, 1.0)
-                upper.anchor + (lower.anchor - upper.anchor) * t - v.anchor_dx
+                x1 = (dx = fixed_dx(id, upper)) ? upper.x + dx : upper.anchor
+                x2 = (dx = fixed_dx(id, lower)) ? lower.x + dx : lower.anchor
+                x1 + (x2 - x1) * t - v.anchor_dx
               elsif (near = @neighbours[v]).any?
                 near.sum(&:anchor).fdiv(near.size) - v.anchor_dx
               else
@@ -250,22 +344,51 @@ module Sourced
             place_row(row, targets)
           end
         end
+        snap_chains
         all = @layers.flatten
         left = all.map(&:x).min
         all.each { it.x -= left }
         @width = all.map { it.x + it.slot_w }.max
       end
 
+      # Pulling together leaves an edge's dummies close, but not quite in
+      # line where a rank pushes one aside: each edge's dummies all go where
+      # one of them is, the nearest to the rest that every rank has room for
+      # (Pele's +snap+), so the edge is one straight run.
+      def snap_chains
+        @mates.values.uniq(&:object_id).each do |mids|
+          xs = mids.map(&:anchor)
+          next if xs.max - xs.min < 0.01
+
+          best = xs.sort_by { |c| [xs.sum { (it - c).abs }, c] }.find do |c|
+            mids.all? { |d| fits?(d, c - d.anchor_dx) }
+          end
+          mids.each { |d| d.x = best - d.anchor_dx } if best
+        end
+      end
+
+      # Whether +v+ fits at +x+, between its neighbours in its layer.
+      def fits?(v, x)
+        row = @layers[v.layer]
+        i = row.index { it.equal?(v) }
+        left = row[i - 1] if i.positive?
+        right = row[i + 1]
+        (!left || x >= left.x + sep(left, v) - 0.01) && (!right || x + sep(v, right) <= right.x + 0.01)
+      end
+
+      # How far +q+'s left must be from +p+'s, its neighbour to the left.
+      def sep(p, q)
+        gap = if p.dummy? && q.dummy? then DUMMY_GAP
+              elsif p.dummy? || q.dummy? then PASSING_GAP
+              else NODE_GAP
+              end
+        p.slot_w + [gap, @flat_gap[p] || 0].max
+      end
+
       def place_row(row, targets)
         return if row.empty?
 
-        seps = row.each_cons(2).map do |p, q|
-          gap = if p.dummy? && q.dummy? then DUMMY_GAP
-                elsif p.dummy? || q.dummy? then PASSING_GAP
-                else NODE_GAP
-                end
-          p.slot_w + [gap, @flat_gap[p] || 0].max
-        end
+        seps = row.each_cons(2).map { |p, q| sep(p, q) }
         weights = row.map { it.dummy? ? 4.0 : 1.0 }
         LayeredLayout.pack(targets, weights, seps).each_with_index { |x, i| row[i].x = x }
       end
@@ -288,20 +411,38 @@ module Sourced
       def ports
         @ports ||= begin
           sides = Hash.new { |h, k| h[k] = [] }
+          fixed = {}
           @chains.each do |id, chain|
-            case @flat[id]
-            in :straight then next
-            in :under
-              # Each end on the side facing the other, so the curve is a U.
-              a, _, b = chain
-              sides[[a.id, :bottom]] << [[id, :a], b.anchor]
-              sides[[b.id, :bottom]] << [[id, :b], a.anchor]
-            else
-              sides[[chain.first.id, :bottom]] << [[id, :upper], chain[1].anchor]
-              sides[[chain.last.id, :top]] << [[id, :lower], chain[-2].anchor]
+            ends = case @flat[id]
+                   in :straight then next
+                   in :under
+                     # Each end on the side facing the other, so the curve is a U.
+                     a, _, b = chain
+                     [[a, :bottom, :a, b.anchor], [b, :bottom, :b, a.anchor]]
+                   else
+                     [[chain.first, :bottom, :upper, chain[1].anchor], [chain.last, :top, :lower, chain[-2].anchor]]
+                   end
+            ends.each do |v, side, key, towards|
+              if (dx = fixed_dx(id, v))
+                fixed[[id, key]] = v.x + dx
+                # Still in the way of the others on the side.
+                sides[[v.id, side]] << [nil, v.x + dx]
+              else
+                sides[[v.id, side]] << [[id, key], towards]
+              end
             end
           end
-          sides.each_with_object({}) { |((id, _), list), acc| acc.merge!(spread(@v.fetch(id), list)) }
+          sides.each_with_object(fixed) do |((id, _), list), acc|
+            acc.merge!(spread(@v.fetch(id), list).reject { |key, _| key.nil? }) if list.any?(&:first)
+          end
+        end
+      end
+
+      # Where edge +id+ is fixed to meet +v+, from its left, if it is.
+      def fixed_dx(id, v)
+        edge = @edges_by_id.fetch(id)
+        if v.id == edge.from then edge.from_dx
+        elsif v.id == edge.to then edge.to_dx
         end
       end
 
@@ -313,7 +454,9 @@ module Sourced
         lo = v.x + margin
         hi = v.x + v.w - margin
         sorted = list.sort_by(&:last)
-        xs = LayeredLayout.pack(sorted.map { it.last.clamp(lo, hi) }, sorted.map { 1.0 }, [PORT_GAP] * (sorted.size - 1))
+        # An end fixed in place (keyless) all but doesn't move.
+        weights = sorted.map { |key, _| key ? 1.0 : 1000.0 }
+        xs = LayeredLayout.pack(sorted.map { it.last.clamp(lo, hi) }, weights, [PORT_GAP] * (sorted.size - 1))
         xs = if xs.last - xs.first > hi - lo
                # More edges than the side has room for at PORT_GAP: share it out.
                step = (hi - lo) / (sorted.size - 1)

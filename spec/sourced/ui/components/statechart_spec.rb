@@ -15,6 +15,20 @@ RSpec.describe Sourced::UI::Components::Statechart do
 
   def render(chart) = described_class.new(chart).call
 
+  # The points each segment of a path ends at, the first its start.
+  def ends(d) = d.scan(/[MLC][^MLC]*/).map { it.scan(/-?[\d.]+/).map(&:to_f).last(2) }
+
+  # Whether +points+ (#ends) cross the top or bottom of the box [x, y, w, h]
+  # through a port: straight across, the point inside right above or below.
+  def through_port?(points, (bx, by, bw, bh))
+    points.each_with_index.any? do |(x, y), i|
+      next false unless x.between?(bx, bx + bw) && [by, by + bh].any? { (y - it).abs < 0.1 }
+
+      inside = [points[i - 1], points[i + 1]].compact.select { |_, iy| iy > by + 0.1 && iy < by + bh - 0.1 }
+      inside.any? && inside.all? { |ix, _| (ix - x).abs < 0.5 }
+    end
+  end
+
   describe 'a definition' do
     subject(:svg) { render(SpecTrip.to_h) }
 
@@ -228,6 +242,78 @@ RSpec.describe Sourced::UI::Components::Statechart do
     dot = svg.at_xpath('//g[@id="sc-p-r-initial"]/circle')
     *, x, y = reset.at_xpath('path')['d'].scan(/-?[\d.]+/).map(&:to_f)
     expect(Math.hypot(x - dot['cx'].to_f, y - dot['cy'].to_f)).to be <= dot['r'].to_f + 0.5
+  end
+
+  # paid is inside checkout, booked outside it (see SpecTrip).
+  it "lays a part's on_final out inside its compound, out through a port in its border" do
+    svg = Nokogiri::XML(render(SpecTrip.to_h))
+    svg.remove_namespaces!
+    box = ->(id) { svg.at_xpath(%(//g[@id="sc-#{id}"]/rect)).then { |r| %w[x y width height].map { r[it].to_f } } }
+    cx, cy, cw, ch = box.('checkout')
+    px, py, pw, ph = box.('checkout-paid')
+    points = ends(svg.at_xpath('//g[@data-from="checkout.paid"]/path')['d'])
+
+    # From paid's bottom, laid out inside checkout down to a port in its border.
+    expect(points.first[1]).to be_within(0.1).of(py + ph)
+    expect(points.first[0]).to be_between(px, px + pw)
+    expect(through_port?(points, [cx, cy, cw, ch])).to be(true)
+  end
+
+  describe 'an edge between checkpoints nested at different depths' do
+    # a ─Dive─▶ c.d.x (two compounds deep), c.d.x ─Surface─▶ z, and
+    # p.r2.y ─Leave─▶ z, from a parallel checkpoint's second region.
+    let(:chart) do
+      state = lambda do |id, type = 'atomic', on: {}, **rest|
+        mounts = type == 'compound' ? [{ src: 'Part', on_final: {} }] : []
+        { id:, key: id.split('.').last, type:, after: [], on:, always: [], mounts:, status: nil, **rest }
+      end
+      cmd = ->(label, target) { { kind: 'command', event: "spec.#{label}", label:, targets: [target], starts: [] } }
+      on = ->(*cmds) { cmds.to_h { [it[:event], it] } }
+      region = lambda do |id, label, to, out = {}|
+        { id:, key: id.split('.').last, initial: "#{id}.i",
+          states: { 'i' => state.("#{id}.i", 'initial', on: on.(cmd.(label, "#{id}.#{to}"))), to => state.("#{id}.#{to}", on: out) } }
+      end
+      { machine: 'Spec', initial: 'initial', states: {
+        'initial' => state.('initial', 'initial', on: on.(cmd.('Start', 'a'))),
+        'a' => state.('a', on: on.(cmd.('Dive', 'c.d.x'), cmd.('Split', 'p'))),
+        'c' => state.('c', 'compound', initial: 'c.i', states: {
+          'i' => state.('c.i', 'initial', on: on.(cmd.('Begin', 'c.d'))),
+          'd' => state.('c.d', 'compound', initial: 'c.d.i', states: {
+            'i' => state.('c.d.i', 'initial', on: on.(cmd.('Go', 'c.d.x'))),
+            'x' => state.('c.d.x', on: on.(cmd.('Surface', 'z')))
+          })
+        }),
+        'p' => state.('p', 'parallel', states: {
+          'r1' => region.('p.r1', 'One', 'u'),
+          'r2' => region.('p.r2', 'Two', 'y', on.(cmd.('Leave', 'z')))
+        }),
+        'z' => state.('z', 'final')
+      } }
+    end
+    let(:svg) { Nokogiri::XML(render(chart)).tap(&:remove_namespaces!) }
+
+    def box(id) = svg.at_xpath(%(//g[@id="sc-#{id}"]/rect)).then { |r| %w[x y width height].map { r[it].to_f } }
+
+    {
+      'Dive' => ['a', 'c.d.x', %w[c c-d]],
+      'Surface' => ['c.d.x', 'z', %w[c-d c]],
+      'Leave' => ['p.r2.y', 'z', %w[p]]
+    }.each do |label, (from, to, borders)|
+      it "draws #{label} as one line, from #{from}'s bottom to #{to}'s top, straight across each border it crosses" do
+        paths = svg.xpath(%(//g[@data-from="#{from}"][@data-to="#{to}"]/path))
+        expect(paths.size).to eq(1)
+        points = ends(paths.first['d'])
+
+        fx, fy, fw, fh = box(from.tr('.', '-'))
+        tx, ty, tw, = box(to.tr('.', '-'))
+        expect(points.first[1]).to be_within(0.1).of(fy + fh)
+        expect(points.first[0]).to be_between(fx, fx + fw)
+        expect(points.last[1]).to be_within(0.1).of(ty)
+        expect(points.last[0]).to be_between(tx, tx + tw)
+
+        borders.each { expect(through_port?(points, box(it))).to be(true), "#{label} doesn't cross #{it}'s border through a port" }
+      end
+    end
   end
 
   # A part escalating into a parallel checkpoint's history (see SpecReview).
