@@ -176,6 +176,18 @@ RSpec.describe Sourced::UI::Components::Statechart do
     end
   end
 
+  it 'stacks the labels of edges that share a line, rather than drawing them over each other' do
+    chart = described_class.new(SpecAlarm.to_h)
+    edge = ->(label) { described_class::Edge.new(from: 'a', to: 'b', label:, kind: :command) }
+    line = 'M 0 10 L 100 10'
+    stacked = chart.send(:stack_labels, [[edge.('Complete'), [line, [50, 5, 'middle']]],
+                                         [edge.('Fail'), [line, [50, 5, 'middle']]],
+                                         [edge.('Other'), ['M 0 90 L 100 90', [50, 85, 'middle']]]])
+
+    expect(stacked.map { |e, (_, (x, y, _))| [e.label, x, y] })
+      .to eq([['Complete', 50, 5], ['Fail', 50, 5 - (described_class::LABEL_H + 2)], ['Other', 50, 85]])
+  end
+
   it 'widens its view to an edge routed outside the boxes, and to its label' do
     chart = described_class.new(SpecAlarm.to_h)
     root = Struct.new(:x, :y, :right, :bottom).new(0, 0, 200, 100)

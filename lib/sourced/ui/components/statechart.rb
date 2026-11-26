@@ -111,6 +111,7 @@ module Sourced
             loops.each_with_index { |edge, i| drawings << [edge, self_loop(@boxes.fetch(id), i, loops.size)] }
           end
           @direct.each { |edge| drawings << [edge, route(@boxes.fetch(edge.from), @boxes.fetch(edge.to))] }
+          drawings = stack_labels(drawings)
 
           # What's drawn, not just the boxes laid out: an edge routed around
           # the outside, or its label, reaches past them.
@@ -384,6 +385,24 @@ module Sourced
               col_x += region.w + GAP_X
             end
           else nil
+          end
+        end
+
+        # Edges between the same two checkpoints share a line, and their labels
+        # its one place (+rechecking_date+ to +cleaning+ on CompleteDateRecheck
+        # or FailDateRecheck): each label after the first at a place is moved
+        # up a line, so they read as a list. Each edge keeps its own drawing, so
+        # an instance still lights the one it took.
+        def stack_labels(drawings)
+          seen = Hash.new(0)
+          drawings.map do |edge, (d, label)|
+            x, y, anchor = label
+            next [edge, [d, label]] unless x && y
+
+            at = [x.round, y.round]
+            above = seen[at]
+            seen[at] += 1
+            [edge, [d, [x, y - above * (LABEL_H + 2), anchor]]]
           end
         end
 
