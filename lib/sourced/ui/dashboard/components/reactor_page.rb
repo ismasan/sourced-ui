@@ -15,12 +15,7 @@ module Sourced
         # with what it accepts and refuses, at /reactors/:group_id/states/:state
         # (the state as its chart DOM id).
         class ReactorPage < Component
-          KINDS = {
-            Sourced::Machine => 'machine',
-            Sourced::Decider => 'decider',
-            Sourced::Projector => 'projector',
-            Sourced::DurableWorkflow => 'workflow'
-          }.freeze
+          KINDS = Sourced::UI::Boundaries::KINDS
 
           # @return [ReactorPage, nil] nil for a reactor or state that doesn't exist
           # @param topology [#call] returns Sourced.topology: only built for a reactor that isn't a machine

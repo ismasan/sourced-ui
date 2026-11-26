@@ -44,6 +44,7 @@ bundle exec rake install
 - **Specs** boot Sourced per example inside `Sync { }` (see `router_spec.rb`): `Sourced.start!` spawns its pollers into the current Async task, even with `workers.count` 0, and raises `Sourced::Spawner::NoTaskError` outside one.
 - **Datastar builder** (`_d`, from `Sidereal::DatastarHelpers`) is an immutable builder — each method returns a new copy. Chain calls like `_d.click.post('/path', retries: 3).signals(foo: 'bar').to_h` to produce HTML attribute hashes.
 - **Dashboard Service** (`Sourced::UI::Dashboard::Service < Sidereal::App`) is the routed Rack app. `GET` pages render via `component(cmp)`; SSE routes use `datastar.stream { |sse| ... }` with `patch_elements`. `POST /commands` is auto-wired by Sidereal::App — `handle MessageClass do |cmd| ... end` registers the handler.
+- **Topology page** — `Sourced::UI::Boundaries.build(Sourced.topology, reactors)` derives the messages crossing between reactors (commands dispatched, events reacted to/projected/evolved from, child machines started); `Components::BoundaryMap` draws them with `LayeredLayout`. Producers come from command/automation `produces`, never the topology event node's `group_id` (first-registered wins there).
 - **Causation trees** — `Dashboard.build_causation_tree(events)` converts flat event lists into `Node` trees based on `causation_id` relationships.
 
 ### Dependencies

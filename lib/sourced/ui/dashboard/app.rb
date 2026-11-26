@@ -157,7 +157,8 @@ module Sourced
         end
 
         get '/topology' do
-          component(Components::TopologyPage.new(topology: Sourced.topology.map(&:to_h)))
+          reactors = Sourced.router.reactors
+          component(Components::TopologyPage.new(boundaries: Sourced::UI::Boundaries.build(Sourced.topology, reactors)))
         end
 
         get '/reactors/:group_id' do |group_id:|

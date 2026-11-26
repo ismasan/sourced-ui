@@ -2080,3 +2080,60 @@ dl.prop-table {
   button:disabled:hover { background: var(--slate-50); border-color: var(--slate-300); }
 }
 .feed-nav + .panel__link { margin-left: 0.5rem; }
+
+/* Topology: the reactors, and the messages crossing between them */
+.topology__lead { max-width: 60rem; margin: 0.5rem 0 0; font-size: 14px; line-height: 1.5; }
+.topology .chart-card__canvas { padding: 1rem; }
+.topology__table td:first-child, .topology__table td:nth-child(3) { white-space: nowrap; }
+.topology__table a { color: var(--teal-700); text-decoration: none; font-weight: 500; }
+.topology__table a:hover { text-decoration: underline; }
+
+.boundary-map {
+  display: block;
+  margin: 0 auto;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.boundary-map__box {
+  fill: white;
+  stroke: var(--slate-300);
+  stroke-width: 1.2;
+  filter: drop-shadow(0 1px 1.5px rgba(15, 23, 42, 0.1));
+}
+.boundary-map__stripe { fill: var(--slate-400); }
+.boundary-map__node--machine .boundary-map__stripe { fill: var(--teal-600); }
+.boundary-map__node--decider .boundary-map__stripe { fill: var(--amber-400); }
+.boundary-map__node--projector .boundary-map__stripe { fill: var(--em-readmodel-stroke); }
+.boundary-map__kind {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  fill: var(--slate-400);
+}
+.boundary-map__name { font-size: 12.5px; font-weight: 600; fill: var(--slate-800); }
+.boundary-map__link { cursor: pointer; }
+.boundary-map__node:hover .boundary-map__box { stroke: var(--teal-600); stroke-width: 2; }
+
+.boundary-map__edge { fill: none; stroke-width: 1.5; transition: opacity 0.12s; }
+.boundary-map__edge--command { stroke: #3b82f6; }
+.boundary-map__edge--event { stroke: #f97316; }
+.boundary-map__edge--projection { stroke: #86c99c; stroke-width: 1.1; stroke-dasharray: 4 3; }
+.boundary-map__arrow--command { fill: #3b82f6; }
+.boundary-map__arrow--event { fill: #f97316; }
+.boundary-map__arrow--projection { fill: #86c99c; }
+
+.boundary-map__label { font-size: 10.5px; font-weight: 500; transition: opacity 0.12s; paint-order: stroke; stroke: var(--slate-50); stroke-width: 3px; stroke-linejoin: round; }
+.boundary-map__label--command { fill: #1e40af; }
+.boundary-map__label--event { fill: #9a3412; }
+.boundary-map__label--projection { fill: var(--slate-500); font-weight: 400; }
+
+.em-key__item.bm-key--command::before { height: 0; border-radius: 0; border-width: 2px 0 0; border-color: #3b82f6; }
+.em-key__item.bm-key--event::before { height: 0; border-radius: 0; border-width: 2px 0 0; border-color: #f97316; }
+.em-key__item.bm-key--projection::before { height: 0; border-radius: 0; border-width: 2px 0 0; border-style: dashed; border-color: #86c99c; }
+
+.bm-message { font-family: ui-monospace, 'SF Mono', Menlo, Monaco, monospace; font-size: 12px; }
+.bm-message--command { color: #1e40af; }
+.bm-message--event { color: #9a3412; }
+.bm-relation { font-size: 12px; color: var(--slate-600); }
+.bm-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+.topology__table td { vertical-align: top; }
