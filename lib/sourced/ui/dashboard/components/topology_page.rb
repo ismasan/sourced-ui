@@ -73,29 +73,30 @@ module Sourced
             end
           end
 
+          # The map, by reactor or by namespace, with reads or without: all
+          # four drawings rendered, the switches showing one without a request.
           def render_map
-            full = Sourced::UI::Components::BoundaryMap.new(@boundaries, href:, title: 'Reactor boundaries')
-            driving = Sourced::UI::Components::BoundaryMap.new(@boundaries, href:, projections: false,
-                                                               title: 'Reactor boundaries, without read models')
+            map = ->(boundaries, projections, title) { Sourced::UI::Components::BoundaryMap.new(boundaries, href:, projections:, title:) }
+            grouped = @boundaries.grouped
+            maps = {
+              reactors: [map.(@boundaries, true, 'Reactor boundaries'), map.(@boundaries, false, 'Reactor boundaries, without reads')],
+              namespaces: [map.(grouped, true, 'Namespace boundaries'), map.(grouped, false, 'Namespace boundaries, without reads')]
+            }
             reads, rest = @boundaries.links.partition { it.kind == :projection }
-            toggle = !driving.empty? && reads.any?
+            toggle = !maps[:reactors].last.empty? && reads.any?
             # Reads shown unless they outnumber the rest, as they do once a
             # system has a read model or two per decider: they'd hide it.
             shown = !toggle || reads.size <= rest.size
+            # Only when grouping puts reactors together.
+            by_namespace = grouped.reactors.size < @boundaries.reactors.size
 
-            # Both drawings are rendered; the switch shows one, without a request.
-            figure(class: 'chart-card', data: { 'signals:projections' => shown.to_s }) do
+            figure(class: 'chart-card', data: { 'signals' => { projections: shown, grouped: false }.to_json }) do
               figcaption(class: 'chart-card__bar') do
                 strong { 'Boundaries' }
-                span(class: 'muted') { 'Arrows run the way messages go. Hover a reactor to pick out its own.' }
+                span(class: 'muted') { 'Arrows run the way messages go. Hover a box to pick out its own.' }
                 div(class: 'chart-card__tools') do
-                  if toggle
-                    label(class: 'switch') do
-                      input(type: 'checkbox', role: 'switch', checked: shown, data: { 'bind:projections' => true })
-                      span(class: 'switch__track', aria: { hidden: 'true' })
-                      plain 'Reads'
-                    end
-                  end
+                  switch('By namespace', 'grouped', false) if by_namespace
+                  switch('Reads', 'projections', shown) if toggle
                   ul(class: 'em-key', aria: { label: 'Key' }) do
                     li(class: 'em-key__item bm-key--command') { 'Dispatches / starts' }
                     li(class: 'em-key__item bm-key--event') { 'Reacts to' }
@@ -103,11 +104,36 @@ module Sourced
                   end
                 end
               end
-              div(class: 'chart-card__canvas', style: ('display: none' unless shown), data: { show: '$projections' }) { render full }
-              if toggle
-                div(class: 'chart-card__canvas', style: ('display: none' if shown), data: { show: '!$projections' }) { render driving }
+              maps.each do |level, (full, driving)|
+                next if level == :namespaces && !by_namespace
+
+                at = level == :namespaces ? '$grouped' : '!$grouped'
+                visible = level == :reactors # what the signals start at
+                if full.empty?
+                  canvas(at, visible) { p(class: 'muted topology__none') { 'Every crossing is between reactors in the same namespace.' } }
+                  next
+                end
+                # Without reads there may be nothing left: the full map stays.
+                if driving.empty?
+                  canvas(at, visible) { render full }
+                else
+                  canvas("#{at} && $projections", visible && shown) { render full }
+                  canvas("#{at} && !$projections", visible && !shown) { render driving }
+                end
               end
             end
+          end
+
+          def switch(text, signal, checked)
+            label(class: 'switch') do
+              input(type: 'checkbox', role: 'switch', checked:, data: { "bind:#{signal}" => true })
+              span(class: 'switch__track', aria: { hidden: 'true' })
+              plain text
+            end
+          end
+
+          def canvas(show, visible, &)
+            div(class: 'chart-card__canvas', style: ('display: none' unless visible), data: { show: }, &)
           end
 
           # A row for each reactor pair one way and how messages cross it:

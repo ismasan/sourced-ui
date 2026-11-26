@@ -2172,3 +2172,5 @@ a.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--t
 .reactor-pill--machine { border-left-color: var(--teal-600); }
 .reactor-pill--decider { border-left-color: var(--amber-400); }
 .reactor-pill--projector { border-left-color: var(--em-readmodel-stroke); }
+.boundary-map__node--namespace .boundary-map__box { stroke: var(--slate-400); stroke-width: 1.5; }
+.boundary-map__node--namespace .boundary-map__stripe { fill: var(--slate-700); }

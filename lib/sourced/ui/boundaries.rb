@@ -93,6 +93,11 @@ module Sourced
 
       def empty? = @crossings.empty?
 
+      # The same boundaries a level up: reactors sharing the first segment of
+      # their group_id in one Group, as the dashboard's consumer group list
+      # groups them. See Grouped.
+      def grouped = @grouped ||= Grouped.new(self)
+
       # The reactors no message crosses into or out of.
       def isolated
         linked = @crossings.flat_map { [it.from, it.to] }.compact.to_set
@@ -194,6 +199,60 @@ module Sourced
       def dedupe(crossings)
         crossings.group_by { [it.from, it.to, it.message, it.relation] }.map do |_, list|
           list.first.with(via: list.map(&:via).compact.uniq.join(', ').then { it.empty? ? nil : it })
+        end
+      end
+      # Reactors whose group_ids share a first segment (+expenses+ in
+      # +expenses.categorizer+), as one. Its +group_id+ is the segment and
+      # +.*+, apart from any reactor's. +inside+ counts the crossings between
+      # its members, which Grouped leaves out.
+      Group = Data.define(:group_id, :label, :members, :entries, :inside) do
+        def reactor = nil
+      end
+
+      # Boundaries with each namespace's reactors as one Group: only messages
+      # crossing from one namespace to another cross a boundary, and are
+      # linked. A reactor whose group_id has one segment stands alone, as on
+      # the consumer group list. Answers what BoundaryMap draws.
+      class Grouped
+        attr_reader :reactors, :crossings, :links
+
+        # @param boundaries [Boundaries]
+        def initialize(boundaries)
+          @boundaries = boundaries
+          crossings = boundaries.crossings.map { it.with(from: key(it.from), to: it.to && key(it.to)) }
+          inner, @crossings = crossings.partition { it.from == it.to }
+          @crossings = @crossings.group_by { [it.from, it.to, it.message, it.relation] }.map do |_, list|
+            list.first.with(via: list.map(&:via).compact.uniq.join(', ').then { it.empty? ? nil : it })
+          end
+          inside = inner.map(&:from).tally
+          @reactors = boundaries.reactors.group_by { key(it.group_id) }.map do |key, members|
+            next members.first if key == members.first.group_id
+
+            Group.new(group_id: key, label: label(key, members), members:, entries: members.flat_map(&:entries),
+                      inside: inside.fetch(key, 0))
+          end
+          index = 0
+          @links = @crossings.select(&:to).group_by { [it.from, it.to, LINK_KINDS.fetch(it.relation)] }.map do |(from, to, kind), list|
+            Link.new(id: "ns-link-#{index += 1}", from:, to:, kind:, crossings: list)
+          end
+        end
+
+        def empty? = @crossings.empty?
+
+        def reactor(group_id) = @reactors.find { it.group_id == group_id }
+
+        private
+
+        def key(group_id)
+          head, rest = group_id.split('.', 2)
+          rest ? "#{head}.*" : group_id
+        end
+
+        # The module its members' classes share (+Expenses+), as the consumer
+        # group list titles a namespace; else the segment.
+        def label(key, members)
+          heads = members.map { (it.reactor&.name || it.label).to_s.split('::').first }.uniq
+          heads.size == 1 && !heads.first.to_s.empty? ? heads.first : key.delete_suffix('.*')
         end
       end
     end

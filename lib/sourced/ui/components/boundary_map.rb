@@ -30,7 +30,7 @@ module Sourced
 
         KINDS = %i[command event projection].freeze
 
-        # @param boundaries [Boundaries]
+        # @param boundaries [Boundaries, Boundaries::Grouped]
         # @param href [#call, nil] a reactor's URL from its group_id, or nil for none
         # @param projections [Boolean] whether to draw what's only read
         # @param title [String] accessible name for the drawing
@@ -40,7 +40,7 @@ module Sourced
           @title = title
           # Marker ids of its own: a page draws the map twice, and url(#id)
           # finds the first, hidden with its map.
-          @arrow = projections ? 'bm-arrow' : 'bm-arrow-driving'
+          @arrow = ['bm-arrow', ('ns' if Boundaries::Grouped === boundaries), (projections ? 'all' : 'driving')].compact.join('-')
           @links = boundaries.links.select { projections || it.kind != :projection }
           ids = @links.flat_map { [it.from, it.to] }.uniq
           @reactors = boundaries.reactors.select { ids.include?(it.group_id) }
@@ -153,11 +153,21 @@ module Sourced
         end
 
         def kind_line(reactor, kind)
+          if Boundaries::Group === reactor
+            count = reactor.members.size
+            return "#{count} reactor#{'s' unless count == 1} · #{reactor.inside} inside"
+          end
+
           entries = reactor.entries.size
           entries.zero? ? kind.to_s : "#{kind} · #{entries} from outside"
         end
 
         def tooltip(reactor)
+          if Boundaries::Group === reactor
+            return [reactor.label, *reactor.members.map { "  #{it.label}" },
+                    "#{reactor.inside} crossings between them"].join("\n")
+          end
+
           lines = [reactor.reactor&.name || reactor.group_id]
           lines << "Commands from outside: #{reactor.entries.join(', ')}" if reactor.entries.any?
           lines.join("\n")
@@ -317,6 +327,8 @@ module Sourced
         end
 
         def kind_of(reactor)
+          return 'namespace' if Boundaries::Group === reactor
+
           klass = reactor.reactor
           return 'reactor' unless Module === klass
 

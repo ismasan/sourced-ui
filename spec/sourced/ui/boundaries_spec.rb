@@ -165,3 +165,41 @@ RSpec.describe Sourced::UI::Components::BoundaryMap, 'around a hub' do
     end
   end
 end
+
+RSpec.describe Sourced::UI::Boundaries::Grouped do
+  def node(type, id, group, **rest) = { type:, id:, name: "X::#{id}", group_id: group, group_label: group, produces: [], **rest }
+
+  # billing.invoices dispatches to billing.payments (inside billing), reacts
+  # to orders.cart's event (orders into billing), and audit, a reactor of
+  # one segment, reads orders.cart's event.
+  let(:boundaries) do
+    Sourced::UI::Boundaries.build([
+      node('command', 'orders.checkout', 'orders.cart', produces: ['orders.checked_out']),
+      node('event', 'orders.checked_out', 'orders.cart'),
+      node('automation', 'invoices-aut', 'billing.invoices', consumes: ['orders.checked_out'], produces: ['billing.charge']),
+      node('command', 'billing.charge', 'billing.payments', produces: []),
+      node('readmodel', 'audit-rm', 'audit', consumes: ['orders.checked_out'])
+    ])
+  end
+  subject(:grouped) { boundaries.grouped }
+
+  it 'puts reactors sharing a group_id prefix together, a reactor of one segment alone' do
+    expect(grouped.reactors.map(&:group_id)).to contain_exactly('orders.*', 'billing.*', 'audit')
+    billing = grouped.reactor('billing.*')
+    expect(billing).to have_attributes(members: contain_exactly(have_attributes(group_id: 'billing.invoices'), have_attributes(group_id: 'billing.payments')),
+                                       inside: 1, reactor: nil)
+    expect(grouped.reactor('audit')).to be_a(Sourced::UI::Boundaries::Reactor)
+  end
+
+  it 'links only what crosses from one namespace to another' do
+    expect(grouped.links.map { [it.from, it.to, it.kind] })
+      .to contain_exactly(['orders.*', 'billing.*', :event], ['orders.*', 'audit', :projection])
+    expect(grouped.crossings.map(&:name)).not_to include('X::billing.charge')
+  end
+
+  it 'is drawn like reactors, a box per namespace' do
+    html = Sourced::UI::Components::BoundaryMap.new(grouped).call
+    expect(html).to include('boundary-map__node--namespace', '2 reactors · 1 inside')
+    expect(html.scan(/<marker id="bm-arrow-ns-all/).size).to eq(3)
+  end
+end
