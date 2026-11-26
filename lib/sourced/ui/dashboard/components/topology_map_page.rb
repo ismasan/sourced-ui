@@ -29,7 +29,7 @@ module Sourced
                   end
                 end
               else
-                render BoundaryMaps.new(boundaries: @boundaries, grouped: @grouped, projections: @projections, full: true)
+                BoundaryMaps(boundaries: @boundaries, grouped: @grouped, projections: @projections, full: true)
               end
             end
           end

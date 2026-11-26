@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'sourced/ui/components'
+require 'sourced/ui/dashboard/components/message_name'
 
 module Sourced
   module UI
@@ -171,7 +172,7 @@ module Sourced
           def render_item(item)
             div(class: 'reactor-panel__item') do
               if item.type
-                span(class: "bm-message bm-message--#{item.kind}", title: item.type) { item.text }
+                MessageName(type: item.type, text: item.text, kind: item.kind)
               else
                 span(class: 'reactor-panel__starts') { item.text }
               end
@@ -277,7 +278,7 @@ module Sourced
             ul(class: 'reactor-panel__messages') do
               rows.each do |name, type, kind, note|
                 li do
-                  span(class: "bm-message bm-message--#{kind}", title: type) { name }
+                  MessageName(type:, text: name, kind:)
                   span(class: 'muted') { " #{note}" } if note
                 end
               end

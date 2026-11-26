@@ -13,6 +13,7 @@ require 'sourced/ui/dashboard/components/events_tree'
 require 'sourced/ui/dashboard/components/topology_page'
 require 'sourced/ui/dashboard/components/topology_map_page'
 require 'sourced/ui/dashboard/components/boundary_maps'
+require 'sourced/ui/dashboard/components/message_name'
 require 'sourced/ui/dashboard/components/offsets_page'
 require 'sourced/ui/dashboard/components/reactor_page'
 require 'sourced/ui/dashboard/components/machine_instance_page'
@@ -34,8 +35,10 @@ module Sourced
       class Service < Sidereal::App
         session secret: ENV.fetch('SOURCED_DASHBOARD_SESSION_SECRET') { 'x' * 64 }
 
-        # Its pan and zoom script, which the layout links.
+        # Their scripts, which the layout links: the full screen map's pan
+        # and zoom, and placing the message schema dialog.
         component Components::BoundaryMaps
+        component Components::MessageName
 
         handle ConsumerGroupMachine::Start do |cmd|
           refusing_invalid_transitions { Sourced.start_consumer_group(cmd.payload.group_id) }
@@ -181,6 +184,17 @@ module Sourced
           panel = Components::ReactorPanel.new(boundaries:, group_id: request.params['id'].to_s,
                                                topology: Sourced.topology, reactors:)
           datastar.stream { |sse| sse.patch_elements panel }
+        end
+
+        # A message's payload schema, patched into MessageName's dialog.
+        get '/messages/schema' do
+          klass = Sourced::Message.registry[request.params['type'].to_s]
+          schema = if Module === klass && klass <= Sourced::Message
+                     Components::MessageSchema.new(klass)
+                   else
+                     Components::MessageSchema::Missing.new
+                   end
+          datastar.stream { |sse| sse.patch_elements schema }
         end
 
         get '/topology' do

@@ -181,6 +181,24 @@ RSpec.describe Sourced::UI::Dashboard::App do
     end
   end
 
+  describe 'GET /messages/schema' do
+    it "patches a message's schema into the dialog" do
+      get '/messages/schema', type: RouterTestEvent.type
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include('datastar-patch-elements', 'id="message-schema-body"', 'thing_id')
+    end
+
+    it "says so for a type that's no message's" do
+      get '/messages/schema', type: 'nope.nothing'
+      expect(last_response.body).to include('id="message-schema-body"', 'No schema for this message.')
+    end
+
+    it 'puts the dialog in every page' do
+      get '/topology'
+      expect(last_response.body).to include('id="message-schema"', 'popover="auto"')
+    end
+  end
+
   describe 'POST /commands' do
     def post_command(type, group_id = TestProjector.group_id)
       post '/commands', command: { type: "sourced.consumer_groups.#{type}", payload: { group_id: } }

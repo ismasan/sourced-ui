@@ -3,6 +3,7 @@
 require 'sourced/ui/components'
 require 'sourced/ui/dashboard/components/layout'
 require 'sourced/ui/dashboard/components/boundary_maps'
+require 'sourced/ui/dashboard/components/message_name'
 
 module Sourced
   module UI
@@ -35,7 +36,7 @@ module Sourced
                       p(class: 'muted') { 'No messages cross between the registered reactors: each keeps to its own.' }
                     end
                   else
-                    render BoundaryMaps.new(boundaries: @boundaries)
+                    BoundaryMaps(boundaries: @boundaries)
                     render_crossings
                   end
                   render_isolated
@@ -104,7 +105,7 @@ module Sourced
                         ul(class: 'bm-messages') do
                           crossings.each do |crossing|
                             li do
-                              span(class: "bm-message bm-message--#{crossing.kind}", title: crossing.message) { crossing.name }
+                              MessageName(type: crossing.message, text: crossing.name, kind: crossing.kind)
                               span(class: 'muted') { " in #{crossing.via}" } if crossing.via && relation == :reacts
                             end
                           end
@@ -147,7 +148,7 @@ module Sourced
                 tbody do
                   list.each do |id, name, (group, relation, _via)|
                     tr do
-                      td { span(class: 'bm-message bm-message--event', title: id) { name } }
+                      td { MessageName(type: id, text: name, kind: :event) }
                       td { reactor_link(group) }
                       td { span(class: "bm-relation bm-relation--#{relation}") { RELATIONS.fetch(relation) } }
                     end

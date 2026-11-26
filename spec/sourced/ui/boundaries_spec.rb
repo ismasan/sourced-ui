@@ -316,3 +316,68 @@ RSpec.describe Sourced::UI::Dashboard::Components::BoundaryMaps, 'full screen' d
     expect(html).not_to include('click__prevent', 'reactor-panel')
   end
 end
+
+RSpec.describe Sourced::UI::Dashboard::Components::MessageName do
+  let(:context) { Struct.new(:request) { def url(path) = "/sourced#{path}" }.new(Struct.new(:env, :path).new({}, '/')) }
+
+  it "renders a button that opens the layout's dialog beside it, and fetches the schema into it" do
+    html = described_class.new(type: SpecShop::ChargePayment.type, kind: :command).call(context:)
+    expect(html).to include('<button type="button" class="message-name bm-message bm-message--command"',
+                            'data-indicator:message-schema-loading',
+                            %(data-on:click="showMessageSchema(el); @get(&quot;/sourced/messages/schema?type=spec_shop.charge_payment&quot;)"),
+                            '>SpecShop::ChargePayment</button>')
+  end
+
+  it 'declares the script that places the dialog, from the file beside it' do
+    script = described_class.assets.find { it.name == 'messages/message_schema.js' }
+    expect(File).to exist(script.path)
+    expect(File.read(script.path)).to include('window.showMessageSchema')
+  end
+
+  it "is opened in the dashboard layout's popover" do
+    html = Sourced::UI::Dashboard::Components::MessageSchema::Dialog.new.call(context:)
+    expect(html).to include('id="message-schema"', 'popover="auto"', 'data-class:is-loading="$messageSchemaLoading"',
+                            'id="message-schema-body"')
+  end
+end
+
+RSpec.describe Sourced::UI::Dashboard::Components::MessageSchema do
+  let(:context) { Struct.new(:request) { def url(path) = path }.new(Struct.new(:env, :path).new({}, '/')) }
+
+  it "describes a message's payload attributes" do
+    html = described_class.new(SpecShop::ChargePayment).call(context:)
+    expect(html).to include('kind-badge--command', 'SpecShop::ChargePayment', 'spec_shop.charge_payment',
+                            '<code class="message-schema__attr">order_id</code>', '<code class="message-schema__type">string</code>',
+                            'required')
+  end
+
+  it "lists nested objects' and arrays' attributes after them, and descriptions" do
+    payload = Class.new do
+      def self.to_json_schema
+        {
+          'type' => 'object', 'required' => %w[address],
+          'properties' => {
+            'address' => { 'type' => 'object', 'required' => %w[city],
+                           'properties' => { 'city' => { 'type' => 'string', 'description' => 'Where it ships' } } },
+            'lines' => { 'type' => 'array', 'items' => { 'type' => 'object', 'properties' => { 'sku' => { 'type' => 'string' } } } },
+            'vendor' => { 'anyOf' => [{ 'type' => 'string' }, { 'type' => 'null' }] },
+            'cents' => { 'type' => %w[integer null] }
+          }
+        }
+      end
+    end
+    klass = Class.new(Sourced::Event) do
+      def self.name = 'Shop::Shipped'
+      def self.type = 'shop.shipped'
+    end
+    klass.const_set(:Payload, payload)
+
+    html = described_class.new(klass).call(context:)
+    rows = html.scan(%r{<code class="message-schema__attr">([^<]+)</code>}).flatten
+    expect(rows).to eq(%w[address address.city lines lines[].sku vendor cents])
+    # Nullable: its type, not null.
+    expect(html).to include('<code class="message-schema__type">string</code><span class="message-schema__nullable">nullable</span>',
+                            '<code class="message-schema__type">integer</code><span class="message-schema__nullable">nullable</span>')
+    expect(html).to include('kind-badge--event', 'Where it ships', 'optional')
+  end
+end
