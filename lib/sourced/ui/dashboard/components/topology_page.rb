@@ -162,8 +162,8 @@ module Sourced
                 h2 { "Self-contained (#{isolated.size})" }
                 p(class: 'muted') { 'No message crosses into or out of these, from other reactors.' }
               end
-              ul(class: 'chips') do
-                isolated.each { |reactor| li { reactor_link(reactor.group_id) } }
+              ul(class: 'topology__isolated') do
+                isolated.each { |reactor| li { reactor_pill(reactor) } }
               end
             end
           end
@@ -196,6 +196,19 @@ module Sourced
           def href = ->(group_id) { helpers.url("/reactors/#{group_id}") if @boundaries.reactor(group_id)&.reactor }
 
           def reactor_label(group_id) = @boundaries.reactor(group_id)&.label || group_id
+
+          # A reactor's name and kind, linked to its page when it has one.
+          def reactor_pill(reactor)
+            klass = reactor.reactor
+            kind = (Module === klass && Sourced::UI::Boundaries::KINDS.find { |base, _| klass <= base }&.last) || 'reactor'
+            url = href.call(reactor.group_id)
+            attrs = { class: "reactor-pill reactor-pill--#{kind}", title: reactor.group_id }
+            content = proc do
+              span(class: 'reactor-pill__name') { reactor.label }
+              span(class: 'reactor-pill__kind') { kind }
+            end
+            url ? a(href: url, **attrs, &content) : span(**attrs, &content)
+          end
 
           def reactor_link(group_id)
             url = href.call(group_id)

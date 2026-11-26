@@ -2137,3 +2137,38 @@ dl.prop-table {
 .bm-relation { font-size: 12px; color: var(--slate-600); }
 .bm-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
 .topology__table td { vertical-align: top; }
+
+/* Self-contained reactors, on the Topology page */
+.topology__isolated {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.reactor-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.7rem 0.35rem 0.6rem;
+  border: 1px solid var(--slate-200);
+  border-left: 3px solid var(--slate-400);
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+  color: var(--slate-800);
+  text-decoration: none;
+}
+a.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--teal-600); }
+.reactor-pill__name { font-weight: 600; }
+.reactor-pill__kind {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--slate-400);
+}
+.reactor-pill--machine { border-left-color: var(--teal-600); }
+.reactor-pill--decider { border-left-color: var(--amber-400); }
+.reactor-pill--projector { border-left-color: var(--em-readmodel-stroke); }
