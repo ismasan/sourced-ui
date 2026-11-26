@@ -20,6 +20,19 @@ module Sourced
         def label = "#{MachineChart.delay_label(delay)} / #{commands.join(', ')}"
       end
 
+      # command type => the group_id of the reactor that handles it, for
+      # +reactors+ (Sourced.router.reactors): a machine's or decider's
+      # commands, or a plain reactor's messages.
+      def command_handlers(reactors)
+        reactors.each_with_object({}) do |reactor, handlers|
+          handled = if reactor.respond_to?(:handled_commands) then reactor.handled_commands
+                    elsif reactor.respond_to?(:handled_messages) then reactor.handled_messages
+                    else []
+                    end
+          handled.each { handlers[it.type] ||= reactor.group_id }
+        end
+      end
+
       # A timer's delay as declared: seconds, or a duration ('15m', 'P30D').
       def delay_label(delay) = Numeric === delay ? "#{delay.to_i}s" : delay.to_s
 

@@ -142,7 +142,13 @@ module Sourced
               end
               div(class: 'chart-card__canvas chart-card__canvas--instance') do
                 href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
-                render Sourced::UI::Components::Statechart.new(@instance, title: "#{@reactor.group_label} statechart", href:)
+                handlers = MachineChart.command_handlers(@reactors)
+                command_href = lambda do |type|
+                  group_id = handlers[type]
+                  reactor_href(group_id) if group_id && group_id != @reactor.group_id
+                end
+                render Sourced::UI::Components::Statechart.new(@instance, title: "#{@reactor.group_label} statechart", href:,
+                                                                         command_href:)
               end
               div(class: 'chart-card__foot') do
                 details(class: 'chart-card__legend') do

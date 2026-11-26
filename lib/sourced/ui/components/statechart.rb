@@ -46,6 +46,9 @@ module Sourced
         EDGE_CHAR_W = 6.0  # the same, for arrow labels
         LABEL_H = 12
         UPRIGHT = 4.0      # how much more an edge's ends lean upright than its first and last stretches
+        ACTION_H = 14      # a line of a checkpoint's entry and exit actions
+        ACTION_TOP = 4     # room above its first one, under the checkpoint's name
+        ACTION_BOTTOM = 5  # and below its last, clear of the box's border
 
         # +extra+ is room kept free to the right of a box, for its self-loops' labels.
         # A region's +layout+ places its children; +origin+ is where it starts.
@@ -71,10 +74,14 @@ module Sourced
         # @param chart [#to_h] a Sourced::Machine instance or class, or the Hash its #to_h returns
         # @param title [String] accessible name for the drawing
         # @param href [#call, nil] a child machine's URL from its group_id, or nil
+        # @param command_href [#call, nil] the URL for a command an entry or exit
+        #   action dispatches, from its type (the page of the reactor that
+        #   handles it), or nil for none
         #   for none: the machines a transition starts link to it
-        def initialize(chart, title: nil, href: nil)
+        def initialize(chart, title: nil, href: nil, command_href: nil)
           @chart = chart.to_h
           @href = href
+          @command_href = command_href
           @title = title || "#{@chart[:machine]} statechart"
           @escalations = escalations_in(@chart)
           @command_labels = MachineChart.command_labels(@chart)
@@ -218,15 +225,15 @@ module Sourced
                  in 'parallel'
                    regions = regions_of(state).map { |region| layout_region(region, [:region, region[:id]], :region) }
                    w = regions.sum(&:w) + GAP_X * [regions.size - 1, 0].max + PAD * 2
-                   w = [w, label_width(state) + PAD * 2].max
-                   { w:, h: PARALLEL_HEAD + (regions.map(&:h).max || 0) + PAD, children: regions }
+                   w = [w, label_width(state) + PAD * 2, actions_width(state)].max
+                   { w:, h: head_height(state) + (regions.map(&:h).max || 0) + PAD, children: regions }
                  in 'compound'
                    inner = layout_region({ id: state[:id], key: state[:key], initial: state[:initial], states: state[:states] },
                                          [:compound, state[:id]], :compound_region)
                    head = label_width(state) + compound_name(state).length * CHAR_W + PAD * 2
-                   { w: [inner.w + PAD * 2, head].max, h: PARALLEL_HEAD + inner.h + PAD, children: [inner] }
+                   { w: [inner.w + PAD * 2, head, actions_width(state)].max, h: head_height(state) + inner.h + PAD, children: [inner] }
                  else
-                   { w: label_width(state), h: NODE_H, children: [] }
+                   { w: [label_width(state), actions_width(state)].max, h: NODE_H + actions_height(state), children: [] }
                  end
           loops = @loops_on.fetch(state[:id], [])
           extra = loops.any? ? LOOP + LOOP_STEP * (loops.size - 1) + loops.map { text_width(it.label) }.max + 8 : 0
@@ -237,6 +244,67 @@ module Sourced
           badge = timer_badge(state)
           timer = badge ? text_width(badge) + 16 : 0
           [(state[:key].length * CHAR_W) + NODE_PAD * 2 + timer, 72].max
+        end
+
+        # A checkpoint's entry and exit actions, a line each, UML's way:
+        # `entry / Notify`, `exit / WorkQueue::Release`. What an action
+        # dispatches is named as on the arrows, if it's this machine's; another
+        # reactor's command in full, so it reads as going elsewhere (see
+        # #command_name). One that dispatches nothing it declares isn't drawn.
+        def action_lines(state) = actions(state).map { |kind, types| "#{kind} / #{types.map { command_name(it) }.join(', ')}" }
+
+        # [kind, the command types it dispatches] for each action that
+        # dispatches any: +entry+s, then +exit+s.
+        def actions(state)
+          %i[entry exit].flat_map do |kind|
+            Array(state[kind]).filter_map do |action|
+              types = Array(action[:dispatches])
+              [kind, types] if types.any?
+            end
+          end
+        end
+
+        # This machine's command as its arrows label it; another's by its
+        # class's full name (+Expenses::Expense::ImportExpense+), or else its
+        # type (+billing.charge_card+), for one not registered here.
+        def command_name(type) = @command_labels.fetch(type) { foreign_command_name(type) }
+
+        def foreign_command_name(type)
+          klass = Sourced::Message.registry[type] if defined?(Sourced::Message) && Sourced::Message.respond_to?(:registry)
+          klass&.name || type
+        end
+
+        # How much taller its actions make a checkpoint, and how wide.
+        def actions_height(state)
+          lines = action_lines(state)
+          lines.empty? ? 0 : ACTION_TOP + lines.size * ACTION_H + ACTION_BOTTOM
+        end
+
+        def actions_width(state)
+          lines = action_lines(state)
+          lines.empty? ? 0 : lines.map { text_width(it) }.max + NODE_PAD * 2
+        end
+
+        # A parallel or compound checkpoint's head: its name, then its actions.
+        def head_height(state) = PARALLEL_HEAD + actions_height(state)
+
+        # Its actions, under its name, from +top+: each command a link to
+        # where +command_href+ says, if it says.
+        def draw_actions(s, box, top)
+          actions(box.data).each_with_index do |(kind, types), i|
+            s.text(x: box.x + NODE_PAD, y: top + ACTION_TOP + (i + 1) * ACTION_H - 3, class: 'statechart__action') do
+              s.plain "#{kind} / "
+              types.each_with_index do |type, j|
+                s.plain ', ' if j.positive?
+                url = @command_href&.call(type)
+                if url
+                  s.a(href: url, class: 'statechart__link') { s.tspan { command_name(type) } }
+                else
+                  s.plain command_name(type)
+                end
+              end
+            end
+          end
         end
 
         # A transition its own state's timer fires says so: `⏱ 15m / Expire`.
@@ -304,7 +372,7 @@ module Sourced
             used = box.children.sum(&:w) + GAP_X * [box.children.size - 1, 0].max
             col_x = x + (box.w - used) / 2.0
             box.children.each do |region|
-              place(region, col_x, y + PARALLEL_HEAD)
+              place(region, col_x, y + head_height(box.data))
               col_x += region.w + GAP_X
             end
           else nil
@@ -357,11 +425,13 @@ module Sourced
               s.rect(x: box.x, y: box.y, width: box.w, height: box.h, rx: 14, class: 'statechart__box')
               s.text(x: box.x + 14, y: box.y + 20, class: 'statechart__label') { state[:key] }
               s.text(x: box.right - 14, y: box.y + 20, class: 'statechart__hint', 'text-anchor': 'end') { 'parallel' }
+              draw_actions(s, box, box.y + PARALLEL_HEAD - 6)
               box.children.each { |region| draw_region(s, region) }
             in :compound
               s.rect(x: box.x, y: box.y, width: box.w, height: box.h, rx: 14, class: 'statechart__box')
               s.text(x: box.x + 14, y: box.y + 20, class: 'statechart__label') { state[:key] }
               s.text(x: box.right - 14, y: box.y + 20, class: 'statechart__hint', 'text-anchor': 'end') { compound_name(state) }
+              draw_actions(s, box, box.y + PARALLEL_HEAD - 6)
               box.children.each { |region| draw_region_contents(s, region) }
             else
               s.rect(x: box.x, y: box.y, width: box.w, height: box.h, rx: 8, class: 'statechart__box')
@@ -370,8 +440,14 @@ module Sourced
               end
               badge = timer_badge(state)
               label_x = badge ? box.x + NODE_PAD : box.cx
-              s.text(x: label_x, y: box.cy + 4, class: 'statechart__label', 'text-anchor': badge ? 'start' : 'middle') { state[:key] }
-              s.text(x: box.right - NODE_PAD, y: box.cy + 4, class: 'statechart__timer', 'text-anchor': 'end') { badge } if badge
+              # Its name in the middle of its first NODE_H, its actions under a rule.
+              name_y = box.y + NODE_H / 2.0 + 4
+              s.text(x: label_x, y: name_y, class: 'statechart__label', 'text-anchor': badge ? 'start' : 'middle') { state[:key] }
+              s.text(x: box.right - NODE_PAD, y: name_y, class: 'statechart__timer', 'text-anchor': 'end') { badge } if badge
+              if action_lines(state).any?
+                s.line(x1: box.x, y1: box.y + NODE_H, x2: box.right, y2: box.y + NODE_H, class: 'statechart__rule')
+                draw_actions(s, box, box.y + NODE_H)
+              end
             end
           end
         end

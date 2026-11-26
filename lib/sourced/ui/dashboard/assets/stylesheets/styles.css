@@ -1709,6 +1709,9 @@ dl.prop-table {
 .statechart__label { fill: var(--slate-800); font-weight: 600; }
 .statechart__hint { fill: var(--slate-400); font-size: 10px; font-style: italic; }
 .statechart__timer { fill: var(--slate-500); font-size: 10px; }
+/* A checkpoint's entry and exit actions, under its name. */
+.statechart__action { fill: var(--slate-500); font-size: 10px; }
+.statechart__rule { stroke: var(--slate-200); stroke-width: 1; }
 .statechart__dot { fill: var(--slate-500); }
 .statechart__history { fill: white; stroke: var(--slate-400); stroke-width: 1.2; }
 

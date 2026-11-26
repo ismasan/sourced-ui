@@ -105,6 +105,56 @@ RSpec.describe Sourced::UI::Components::Statechart do
       expect(render(alarm.to_h)).to include('>⏱ computed / SendSOS<')
     end
 
+    it 'draws a state’s entry and exit actions under its name, the box grown to fit them' do
+      svg = Nokogiri::XML(render(alarm.to_h))
+      armed = svg.at_css('#sc-armed')
+      disarmed = svg.at_css('#sc-disarmed')
+
+      expect(armed.css('.statechart__action').map(&:text)).to eq(['entry / Notify', 'exit / Notify'])
+      expect(armed.at_css('.statechart__rule')).not_to be_nil
+      expect(armed.at_css('rect')['height'].to_f).to be > disarmed.at_css('rect')['height'].to_f
+      expect(disarmed.css('.statechart__action')).to be_empty
+    end
+
+    it 'names another machine’s command it dispatches in full, and leaves out an action that dispatches nothing' do
+      chart = Marshal.load(Marshal.dump(alarm.to_h))
+      armed = chart[:states].values.find { it[:key].to_s == 'armed' }
+      armed[:entry] = [{ dispatches: ['billing.charge_card', 'spec_alarm.notify'], optional: true }]
+      armed[:exit] = [{ dispatches: [], optional: true }]
+
+      actions = Nokogiri::XML(render(chart)).css('#sc-armed .statechart__action').map(&:text)
+      # Not registered here: its type. One registered, its class's name.
+      expect(actions).to eq(['entry / billing.charge_card, Notify'])
+    end
+
+    it 'links each command an action dispatches where command_href says, and leaves the rest as text' do
+      chart = Marshal.load(Marshal.dump(alarm.to_h))
+      armed = chart[:states].values.find { it[:key].to_s == 'armed' }
+      armed[:entry] = [{ dispatches: ['billing.charge_card', 'spec_alarm.notify'], optional: true }]
+      command_href = ->(type) { "/reactors/billing" if type == 'billing.charge_card' }
+
+      entry = Nokogiri::XML(described_class.new(chart, command_href:).call).css('#sc-armed .statechart__action').first
+      link = entry.at_css('a.statechart__link')
+      expect(entry.text).to eq('entry / billing.charge_card, Notify')
+      expect(link['href']).to eq('/reactors/billing')
+      expect(link.text).to eq('billing.charge_card')
+      expect(entry.css('a').size).to eq(1)
+    end
+
+    it 'names a registered command of another machine by its class' do
+      chart = Marshal.load(Marshal.dump(SpecLight.to_h))
+      state = chart[:states].values.find { it[:type] == 'atomic' }
+      state[:entry] = [{ dispatches: [SpecAlarm::SendSOS.type], optional: false }]
+
+      actions = Nokogiri::XML(render(chart)).css('.statechart__action').map(&:text)
+      expect(actions).to eq(['entry / SpecAlarm::SendSOS'])
+    end
+
+    it 'maps each command to the reactor that handles it' do
+      handlers = Sourced::UI::MachineChart.command_handlers([alarm])
+      expect(handlers).to include('spec_alarm.notify' => alarm.group_id, 'spec_alarm.send_sos' => alarm.group_id)
+    end
+
     it "slices a state with actions from the machine's topology" do
       slice = Sourced::UI::MachineSlice.build(alarm, 'armed', Sourced::Topology.build([alarm]))
       expect(slice.nodes.map(&:name)).to include('SpecAlarm::Armed', 'SpecAlarm::Disarm')

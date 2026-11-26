@@ -294,6 +294,10 @@ RSpec.describe Sourced::UI::Dashboard::App do
       get '/reactors/spec_alarm'
       expect(last_response.status).to eq(200)
       expect(last_response.body).to include('>⏱ computed / SendSOS<')
+      # Its actions dispatch its own Notify: no link back to this page.
+      expect(last_response.body).to include('statechart__action">entry / Notify<', 'statechart__action">exit / Notify<')
+      # Picking a state ignores a click on a link in the chart.
+      expect(last_response.body).to include("!evt.target.closest('a') && evt.target.closest('.statechart__node')")
 
       get '/reactors/spec_alarm/states/armed'
       expect(last_response.status).to eq(200)

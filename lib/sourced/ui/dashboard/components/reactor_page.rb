@@ -223,7 +223,8 @@ module Sourced
           # A click on a state picks it: the chart ids them sc-<dom id>.
           def render_chart
             node = "evt.target.closest('.statechart__node')"
-            pick = "#{node} && @get(#{"#{base_href}/states/".to_json} + #{node}.id.slice(3))"
+            # A link in the chart goes where it says, picking nothing.
+            pick = "!evt.target.closest('a') && #{node} && @get(#{"#{base_href}/states/".to_json} + #{node}.id.slice(3))"
             chart = @row ? MachineChart.highlight(@definition, @row.path) : @definition
 
             figure(class: 'chart-card') do
@@ -234,7 +235,8 @@ module Sourced
               end
               div(class: 'chart-card__canvas', data: { 'on:click' => pick }) do
                 href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
-                render Sourced::UI::Components::Statechart.new(chart, title: "#{@reactor.group_label} statechart", href:)
+                render Sourced::UI::Components::Statechart.new(chart, title: "#{@reactor.group_label} statechart", href:,
+                                                                      command_href:)
               end
               div(class: 'chart-card__foot', data: { 'signals:copied' => "''" }) do
                 details(class: 'chart-card__legend') do
@@ -531,6 +533,16 @@ module Sourced
 
           def reactor_href(group_id) = helpers.url("/reactors/#{Rack::Utils.escape_path(group_id)}")
           def base_href = reactor_href(@reactor.group_id)
+
+          # A command an action dispatches, linked to the page of the reactor
+          # that handles it: none for this reactor's own, which this page is.
+          def command_href
+            handlers = MachineChart.command_handlers(@reactors)
+            lambda do |type|
+              group_id = handlers[type]
+              reactor_href(group_id) if group_id && group_id != @reactor.group_id
+            end
+          end
           def state_href(row) = "#{base_href}/states/#{MachineChart.dom_id(row.path)}"
 
           # Fetched over Datastar, which patches the page in, instead of loaded.
