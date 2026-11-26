@@ -603,21 +603,24 @@ h2 {
   border-left-color: var(--amber-400);
 }
 
-/* Expanded, a namespace is only a heading over its cards, which sit at the
-   page's full width like any other, so every progress bar lines up. */
-.namespace[open] {
-  background: none;
-  border: none;
-  border-radius: 0;
-}
-.namespace[open] > .namespace-summary {
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--slate-200);
-  border-radius: 0;
-}
+/* Expanded, a namespace is the one box for all its groups: the same width as
+   a standalone group's box, with its groups as rows inside it rather than
+   boxes of their own. A row's padding makes up for the namespace's wider
+   left border, so its name and bar line up with a standalone group's. A
+   failed, stopped or retrying row keeps its tint, as a band across the box. */
 .namespace[open] > .namespace-summary:hover { background: none; }
-.namespace-failed[open] > .namespace-summary { border-bottom-color: var(--red-300); }
-.namespace-retrying[open] > .namespace-summary { border-bottom-color: var(--amber-300); }
+.namespace-groups > .stream-container {
+  margin: 0;
+  border: none;
+  border-top: 1px solid var(--slate-200);
+  border-radius: 0;
+  padding-left: calc(1rem - 3px);
+}
+.namespace-groups > .consumer-active { background: none; }
+.namespace-groups > .stream-container:last-child { border-radius: 0 0 4px 4px; }
+.namespace-failed .namespace-groups > .stream-container { border-top-color: var(--red-300); }
+.namespace-retrying .namespace-groups > .stream-container { border-top-color: var(--amber-300); }
+.namespace-stopped .namespace-groups > .stream-container { border-top-color: var(--slate-300); }
 
 .stream-label {
   font-size: 14px;
