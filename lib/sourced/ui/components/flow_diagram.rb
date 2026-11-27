@@ -32,7 +32,8 @@ module Sourced
       # so a loop back doesn't light up the whole flow), and a rule for each
       # node fades what doesn't list it.
       #
-      # The graph's +focus+, the messages it's built for, are marked with a
+      # The graph's +focus+, the nodes it's built for (the reactor's steps, or a
+      # machine state's event), are marked with a
       # thicker border, in their own colour, and +aria-current+. A +node_data+ hook adds more +data-+
       # attributes to a node, such as a click opening its message's schema.
       class FlowDiagram < Sidereal::Components::BaseComponent

@@ -29,7 +29,9 @@ module Sourced
     # Built with +starts+, it's what's reachable from them instead (a
     # machine's state, MachineSlice), and +context+ are nodes shown leading
     # in but not the reactor's own, though they may be its. +focus+ are the
-    # nodes it's built for (a machine state's event), for the diagram to mark.
+    # nodes it's built for (a machine state's event), for the diagram to mark:
+    # unless given, the reactor's own steps (its commands, reactions and read
+    # models, not the events it appends).
     class FlowGraph
       # +own+: one of the reactor's steps, or an event it appends, unless it's context.
       # +tags+ say what else it leads to that isn't drawn (see MachineSlice).
@@ -42,15 +44,15 @@ module Sourced
       # @param group_id [String] the reactor's group_id
       # @param starts [Array<String>, nil] the ids to start from (the initiators reaching the reactor, if nil)
       # @param context [Array<String>] ids shown, but not as the reactor's own
-      # @param focus [Array<String>] ids of the messages it's built for
+      # @param focus [Array<String>, nil] ids of the nodes it's built for (the reactor's own steps, if nil)
       # @return [FlowGraph]
-      def self.build(topology, group_id, starts: nil, context: [], focus: [])
+      def self.build(topology, group_id, starts: nil, context: [], focus: nil)
         new(topology.map(&:to_h), group_id, starts:, context:, focus:)
       end
 
       attr_reader :group_id, :nodes, :edges, :starts, :focus
 
-      def initialize(topology, group_id, starts: nil, context: [], focus: [])
+      def initialize(topology, group_id, starts: nil, context: [], focus: nil)
         @group_id = group_id
         @context = context.to_set
         @all = topology
@@ -63,7 +65,7 @@ module Sourced
         @starts = starts ? first_of(starts.select { @by_id.key?(it) }.uniq) : roots
         reached = reach(@starts)
         @nodes = @all.select { reached.include?(it[:id]) }.map { node(it, reached) }
-        @focus = focus.select { reached.include?(it) }
+        @focus = focus ? focus.select { reached.include?(it) } : @nodes.select { it.own && it.kind != :event }.map(&:id)
         @edges = @nodes.flat_map do |node|
           downstream(node.id).select { reached.include?(it) }.map { Edge.new(from: node.id, to: it) }
         end

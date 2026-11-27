@@ -144,4 +144,10 @@ RSpec.describe Sourced::UI::FlowGraph do
     expect(html.scan('is-focus').size).to eq(1)
     expect(html).to match(/is-focus"[^>]*aria-current="true"[^>]*><title>event: renamed\n/)
   end
+
+  it "marks the reactor's own steps, not the events they append, unless told what it's built for" do
+    expect(described_class.build(topology, 'Todos').focus).to eq(%w[send rename])
+    expect(described_class.build(topology, 'Lists').focus).to eq(%w[lists-rm renamed-Lists-aut])
+    expect(described_class.build(topology, 'Todos', focus: []).focus).to eq([])
+  end
 end
