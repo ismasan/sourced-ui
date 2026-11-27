@@ -20,6 +20,21 @@ module Sourced
           javascript 'messages/message_schema.js', path: 'message_schema.js'
 
 
+          # The +data-+ attributes opening +type+'s schema in the dialog,
+          # beside the element they're on (not below it, covering what's
+          # under it), on a click, Enter or Space: for elements other than the name,
+          # such as a FlowDiagram's boxes.
+          # @param helpers [#url] the request's helpers
+          def self.opener(helpers, type)
+            url = helpers.url("/messages/schema?type=#{Rack::Utils.escape(type)}")
+            # One expression, statements joined by commas, to go after && below.
+            open = "showMessageSchema(el, 'side'), @get(#{url.to_json})"
+            { 'message-type' => type, 'indicator:message-schema-loading' => true,
+              'on:click' => open,
+              # Enter or Space, as a button takes; Space without scrolling the page.
+              'on:keydown' => "(evt.key === 'Enter' || evt.key === ' ') && (evt.preventDefault(), #{open})" }
+          end
+
           # @param type [String] the message's type, as Sourced::Message.registry has it
           # @param text [String, nil] what to show; its class's name by default
           # @param kind [Symbol, String, nil] :command or :event, for its colour
@@ -144,7 +159,7 @@ module Sourced
           # alternatives (+anyOf+, or a list of types) is said apart, so a
           # nullable string reads string, not null.
           def type_of(prop)
-            label = ->(p) { Sourced::UI::Components::EventModel.type_label(p) }
+            label = ->(p) { type_label(p) }
             variants = prop['anyOf'] || prop['oneOf']
             if variants
               nulls, rest = variants.partition { it['type'] == 'null' }
@@ -154,6 +169,16 @@ module Sourced
             return [label.(prop.merge('type' => types - ['null'])), true] if types.include?('null') && types.size > 1
 
             [label.(prop), false]
+          end
+
+          # A JSON schema property's type, briefly: string, [integer], a|b, date-time.
+          def type_label(prop)
+            variants = prop['anyOf'] || prop['oneOf']
+            return variants.map { type_label(it) }.uniq.then { |l| l.size > 1 ? (l - ['string']) : l }.join('|') if variants
+            return prop['enum'].map(&:to_s).join('|') if prop['enum']
+            return "[#{type_label(prop['items'] || {})}]" if prop['type'] == 'array'
+
+            (prop['format'] || Array(prop['type']).join('|')).then { it.empty? ? 'any' : it }
           end
 
           def payload_schema(klass)

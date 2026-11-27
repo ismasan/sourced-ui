@@ -1,0 +1,257 @@
+# frozen_string_literal: true
+
+module Sourced
+  module UI
+    # A reactor's flows as one directed graph, for Components::FlowDiagram to
+    # lay out left to right: every flow the reactor takes part in, from where
+    # it starts through to its end.
+    #
+    # A flow starts at an initiator: a command nothing in the topology
+    # dispatches (a person, or something outside the app, sends it), or an
+    # event nothing appends that something consumes. The graph is what's
+    # reachable downstream of the initiators reaching any of the reactor's
+    # steps: the events their commands append, the read models those feed and
+    # the reactions to them, the commands those dispatch, and on. A loop only
+    # reactions dispatch into (a retry, a timer's tick) has no initiator: a
+    # step of the reactor nothing reaches is reached from a command (the
+    # reactor's first) that reaches it. Of that, it keeps only the reactor's
+    # lineage: what leads to its steps and what follows from them, not a
+    # sibling branch (another read model fed by an event it reads).
+    # Built with +starts+, +lineage+ names whose lineage it keeps the same way
+    # instead (a machine state's event and the commands it takes itself).
+    #
+    # A projector's reaction consumes its read model, not the event it reacts
+    # to, so it's in the graph only once that event is. The event comes from
+    # the reaction's +reacts_to+, when the topology has it, or from its id
+    # (+"<event type>-<group_id>-aut"+). A catch-all reaction reacts to
+    # whatever its read model reads.
+    #
+    # Each node is drawn once, however many lead to it: several events feeding
+    # one read model meet at it. Edges closing a cycle stay in the graph; the
+    # diagram decides how to draw them.
+    #
+    # Built with +starts+, it's what's reachable from them instead (a
+    # machine's state, MachineSlice), and +context+ are nodes shown leading
+    # in but not the reactor's own, though they may be its. +focus+ are the
+    # nodes it's built for (a machine state's event), for the diagram to mark:
+    # unless given, the reactor's own steps (its commands, reactions and read
+    # models, not the events it appends).
+    class FlowGraph
+      # +own+: one of the reactor's steps, or an event it appends, unless it's context.
+      # +tags+ say what else it leads to that isn't drawn (see MachineSlice).
+      Node = Data.define(:id, :kind, :name, :group_id, :group_label, :own, :schema, :tags, :transition)
+      Edge = Data.define(:from, :to)
+
+      MAX_NODES = 120
+
+      # @param topology [Array<#to_h>] Sourced.topology's nodes
+      # @param group_id [String] the reactor's group_id
+      # @param starts [Array<String>, nil] the ids to start from (the initiators reaching the reactor, if nil)
+      # @param context [Array<String>] ids shown, but not as the reactor's own
+      # @param focus [Array<String>, nil] ids of the nodes it's built for (the reactor's own steps, if nil)
+      # @param lineage [Array<String>, nil] ids whose ancestors and descendants it keeps, alone (the reactor's steps, if nil; with +starts+, everything reached)
+      # @return [FlowGraph]
+      def self.build(topology, group_id, starts: nil, context: [], focus: nil, lineage: nil)
+        new(topology.map(&:to_h), group_id, starts:, context:, focus:, lineage:)
+      end
+
+      attr_reader :group_id, :nodes, :edges, :starts, :focus
+
+      def initialize(topology, group_id, starts: nil, context: [], focus: nil, lineage: nil)
+        @group_id = group_id
+        @context = context.to_set
+        @all = topology
+        @by_id = topology.to_h { [it[:id], it] }
+        @consumers = Hash.new { |h, k| h[k] = [] }
+        topology.each { |node| Array(node[:consumes]).each { @consumers[it] << node[:id] } }
+        @produced = topology.flat_map { Array(it[:produces]) }.to_set
+        @triggers = {}
+
+        @starts = starts ? first_of(starts.select { @by_id.key?(it) }.uniq) : roots
+        reached = reach(@starts)
+        around = lineage || (starts ? [] : reached.select { step?(@by_id.fetch(it)) })
+        around = around.select { reached.include?(it) }
+        reached = lineage(reached, around) unless around.empty?
+        # Cut down only once trimmed to the lineage, keeping what's nearest
+        # what it's built around: the reactor's steps can't be what's cut.
+        @truncated = reached.size > MAX_NODES
+        reached = nearest(reached, around.empty? ? @starts : around) if @truncated
+        @starts = @starts.select { reached.include?(it) }
+        @nodes = @all.select { reached.include?(it[:id]) }.map { node(it, reached) }
+        @focus = focus ? focus.select { reached.include?(it) } : @nodes.select { it.own && it.kind != :event }.map(&:id)
+        @edges = @nodes.flat_map do |node|
+          downstream(node.id).select { reached.include?(it) }.map { Edge.new(from: node.id, to: it) }
+        end
+      end
+
+      def empty? = @nodes.empty?
+
+      # Whether the graph was cut short at MAX_NODES.
+      def truncated? = @truncated
+
+      # The events a projector's reaction reacts to, or nil for any other
+      # node. Its edges come in from its read model, which may read more than
+      # it reacts to: a branch passes through the read model into it only
+      # from these.
+      # @param id [String]
+      # @return [Array<String>, nil]
+      def triggers(id)
+        node = @by_id[id]
+        return unless node && Array(node[:consumes]).any? { @by_id.dig(it, :type) == 'readmodel' }
+
+        triggers_of(node)
+      end
+
+      private
+
+      # The initiators whose flows reach the reactor, then a command for each
+      # loop of the reactor's they don't.
+      def roots
+        initiators = @all.select do |node|
+          next false if @produced.include?(node[:id])
+
+          node[:type] == 'command' || (node[:type] == 'event' && @consumers[node[:id]].any?)
+        end
+        steps = @all.filter_map { it[:id] if step?(it) }.to_set
+        starts = initiators.select { |start| reach([start[:id]]).intersect?(steps) }.map { it[:id] }
+        uncovered = steps - reach(starts)
+        mine, others = @all.select { it[:type] == 'command' }.partition { it[:group_id] == @group_id }
+        (mine + others).each do |command|
+          break if uncovered.empty?
+
+          reached = reach([command[:id]])
+          next unless reached.intersect?(uncovered)
+
+          starts << command[:id]
+          uncovered -= reached
+        end
+        starts
+      end
+
+      # +starts+ but those another reaches (an entry action, reached from
+      # the state's event), so each is drawn after what leads to it. Of two
+      # reaching each other, the first stays.
+      def first_of(starts)
+        reaches = starts.to_h { [it, reach([it])] }
+        starts.each_with_index.reject do |start, i|
+          starts.each_with_index.any? do |other, j|
+            other != start && reaches[other].include?(start) && (!reaches[start].include?(other) || j < i)
+          end
+        end.map(&:first)
+      end
+
+      # Of +reached+, only +steps+ (the reactor's, or the focus) and what
+      # leads to them or follows from them: not what only shares an ancestor
+      # with them (another read model fed by the same event). Back from a projector's reaction,
+      # its read model is kept but not followed past: what leads to the
+      # reaction is the event it reacts to, not everything the read model reads.
+      def lineage(reached, steps)
+        upstream = Hash.new { |h, k| h[k] = [] }
+        reached.each { |from| downstream(from).each { upstream[it] << from if reached.include?(it) } }
+
+        ancestors = steps.to_set
+        queue = steps.dup
+        while (id = queue.shift)
+          triggers = triggers(id)
+          preds = upstream[id]
+          if triggers
+            ancestors.merge(preds.select { @by_id.dig(it, :type) == 'readmodel' })
+            preds = triggers.select { reached.include?(it) }
+          end
+          preds.each { queue << it if ancestors.add?(it) }
+        end
+
+        descendants = steps.to_set
+        queue = steps.dup
+        while (id = queue.shift)
+          downstream(id).each { queue << it if reached.include?(it) && descendants.add?(it) }
+        end
+
+        ancestors | descendants
+      end
+
+      def step?(node) = node[:group_id] == @group_id && node[:type] != 'event'
+
+      # The ids reachable from +starts+, a projector's reactions only once
+      # what they react to is: a read model may be reached before the event
+      # one of its reactions reacts to, so the reaction waits for it.
+      def reach(starts)
+        reached = starts.to_set
+        queue = starts.dup
+        waiting = Hash.new { |h, k| h[k] = [] } # trigger => reactions waiting on it
+        take = ->(id) { queue << id if reached.add?(id) }
+        while (id = queue.shift)
+          downstream(id).each do |next_id|
+            next if reached.include?(next_id)
+
+            triggers = triggers_of(@by_id.fetch(next_id))
+            if triggers && triggers.none? { reached.include?(it) }
+              triggers.each { waiting[it] << next_id }
+            else
+              take.(next_id)
+            end
+          end
+          waiting.delete(id)&.each(&take)
+        end
+        reached
+      end
+
+      # MAX_NODES of +reached+, those nearest +seeds+ by edges either way.
+      def nearest(reached, seeds)
+        near = Hash.new { |h, k| h[k] = [] }
+        reached.each do |from|
+          downstream(from).each do |to|
+            next unless reached.include?(to)
+
+            near[from] << to
+            near[to] << from
+          end
+        end
+        kept = seeds.select { reached.include?(it) }.first(MAX_NODES).to_set
+        queue = kept.to_a
+        while (id = queue.shift) && kept.size < MAX_NODES
+          near[id].each { queue << it if kept.size < MAX_NODES && kept.add?(it) }
+        end
+        kept
+      end
+
+      def downstream(id)
+        node = @by_id.fetch(id)
+        (Array(node[:produces]) + @consumers[id]).select { @by_id.key?(it) }.uniq
+      end
+
+      # The events an automation reacts to, or nil for anything not one.
+      def triggers_of(node) = @triggers.fetch(node[:id]) { @triggers[node[:id]] = find_triggers(node) }
+
+      def find_triggers(node)
+        return unless node[:type] == 'automation'
+        return Array(node[:reacts_to]) if node[:reacts_to]
+
+        Array(node[:consumes]).flat_map do |id|
+          next [id] unless @by_id.dig(id, :type) == 'readmodel'
+
+          event = node[:id].delete_suffix("-#{node[:group_id]}-aut")
+          @by_id.dig(event, :type) == 'event' ? [event] : Array(@by_id[id][:consumes])
+        end
+      end
+
+      # An event belongs to what appends it in the graph (a command, or else
+      # an automation), not to the reactor the topology registered it under:
+      # that's whichever reactor came first, maybe one that only reads it.
+      def node(raw, reached)
+        group_id = raw[:group_id]
+        group_label = raw[:group_label] || group_id
+        if raw[:type] == 'event'
+          appending = @all.select { reached.include?(it[:id]) && Array(it[:produces]).include?(raw[:id]) }
+          if (by = appending.find { it[:type] == 'command' } || appending.find { it[:type] == 'automation' })
+            group_id = by[:group_id]
+            group_label = by[:group_label] || group_id
+          end
+        end
+        Node.new(id: raw[:id], kind: raw[:type].to_sym, name: raw[:name], group_id:, group_label:,
+                 own: group_id == @group_id && !@context.include?(raw[:id]), schema: raw[:schema] || {}, tags: raw[:tags] || [],
+                 transition: raw[:transition] == true)
+      end
+    end
+  end
+end

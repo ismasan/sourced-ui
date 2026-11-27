@@ -282,10 +282,13 @@ RSpec.describe Sourced::UI::Dashboard::Components::ReactorPanel do
 
   it "shows another reactor's event model, the events it takes and where from" do
     html = render(SpecShop::Checkout.group_id)
-    expect(html).to include('class="event-model"', 'Events it takes (2)', 'from SpecShop::Orders',
+    expect(html).to include('class="flow-diagram flow-diagram--down"', 'Events it takes (2)', 'from SpecShop::Orders',
                             'Dispatches, by what it reacts to (2 reactions)', 'on SpecShop::OrderPlaced',
                             '<dt>to SpecShop::Payments</dt>', 'SpecShop::ChargePayment')
     expect(render(SpecShop::Orders.group_id)).to include('SpecShop::PlaceOrder', '→ SpecShop::OrderPlaced')
+    # Its flows top to bottom, a message's box opening its schema.
+    expect(html).not_to include('matrix(0 1 1 0 0 0)')
+    expect(html).to include(%(data-message-type="#{SpecShop::ChargePayment.type}"), "showMessageSchema(el, 'side')")
   end
 
   it "lists a namespace's reactors, each opening its own panel" do

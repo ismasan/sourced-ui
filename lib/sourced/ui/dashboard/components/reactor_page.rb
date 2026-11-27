@@ -124,30 +124,20 @@ module Sourced
           end
 
           def render_flow
-            event_model_card(EventFlow.build(@topology.call, @reactor.group_id),
-                             title: "#{@reactor.group_label} event model",
-                             lead: 'What triggers it, what it decides, and what reacts downstream.')
+            flows_card(FlowGraph.build(@topology.call, @reactor.group_id),
+                       title: "#{@reactor.group_label} flows",
+                       lead: 'Every flow it takes part in, from the command starting it to its end.')
           end
 
-          def event_model_card(flow, title:, lead:)
-            return if flow.empty?
+          def flows_card(graph, title:, lead:)
+            return if graph.empty?
 
             href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
-            schemas = Sourced::UI::Components::EventModel.schemas?(flow)
-
-            # Both drawings are rendered; the toggle shows one, without a request.
-            figure(class: 'chart-card', data: { 'signals:schemas' => 'false' }) do
+            figure(class: 'chart-card') do
               figcaption(class: 'chart-card__bar') do
-                strong { 'Event model' }
+                strong { 'Flows' }
                 span(class: 'muted') { lead }
                 div(class: 'chart-card__tools') do
-                  if schemas
-                    label(class: 'switch') do
-                      input(type: 'checkbox', role: 'switch', data: { 'bind:schemas' => true })
-                      span(class: 'switch__track', aria: { hidden: 'true' })
-                      plain 'Schemas'
-                    end
-                  end
                   ul(class: 'em-key', aria: { label: 'Key' }) do
                     li(class: 'em-key__item em-key__item--command') { 'Command' }
                     li(class: 'em-key__item em-key__item--event') { 'Event' }
@@ -156,19 +146,16 @@ module Sourced
                   end
                 end
               end
-              div(class: 'chart-card__canvas chart-card__canvas--plain', data: { show: '!$schemas' }) do
-                render Sourced::UI::Components::EventModel.new(flow, href:, title:)
+              div(class: 'chart-card__canvas chart-card__canvas--flow') do
+                render Sourced::UI::Components::FlowDiagram.new(graph, href:, title:, node_data: method(:schema_data))
               end
-              if schemas
-                div(class: 'chart-card__canvas chart-card__canvas--plain', style: 'display: none', data: { show: '$schemas' }) do
-                  render Sourced::UI::Components::EventModel.new(flow, href:, title: "#{title}, with message schemas", schemas: true)
-                end
-              end
-              if flow.truncated?
-                p(class: 'chart-card__note') { 'The flow goes on further downstream than shown.' }
-              end
+              p(class: 'chart-card__note') { 'Cut short: there is more downstream than shown.' } if graph.truncated?
             end
           end
+
+          # A command or event's box opens its payload schema in MessageName's
+          # dialog, beside it, on a click or Enter.
+          def schema_data(node) = %i[command event].include?(node.kind) ? MessageName.opener(helpers, node.id) : {}
 
           def render_handlers
             render_flow
@@ -347,10 +334,10 @@ module Sourced
               end
             end
 
-            event_model_card(
+            flows_card(
               MachineSlice.build(@reactor, @row.path, @topology.call),
-              title: "#{@reactor.group_label} in #{@row.path}, event model",
-              lead: "What it takes in #{@row.name}, what that appends, and what reacts downstream."
+              title: "#{@reactor.group_label} in #{@row.path}, flows",
+              lead: "How it gets into #{@row.name}, what it takes there, what that appends, and what reacts downstream."
             )
           end
 

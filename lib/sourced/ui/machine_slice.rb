@@ -2,10 +2,10 @@
 
 module Sourced
   module UI
-    # A machine's event model in one state: what it takes there, what that
-    # appends, and what reacts downstream, as an EventFlow.
+    # A machine's flows in one state: what it takes there, what that appends,
+    # and what reacts downstream, as a FlowGraph.
     #
-    # The topology is cut down to the state before EventFlow walks it: of the
+    # The topology is cut down to the state before FlowGraph walks it: of the
     # machine's own commands and automations, only the commands the state
     # accepts (its own and its enclosing states') and the automations of the
     # state and its enclosing states remain, so the walk can't wander into the
@@ -21,13 +21,18 @@ module Sourced
     # as its handlers don't declare them. One that may leave the machine where
     # it is (a data-only command, or one that may not move) is tagged +stays+:
     # staying appends no state event to draw.
+    #
+    # Of that, only the lineage of the state's event, of the commands the
+    # state takes itself and of its own automations is kept: what leads to them and what follows from
+    # them. What only enclosing states take (and what hangs off it) is left
+    # out unless it's in that lineage.
     module MachineSlice
       extend self
 
       # @param machine [Class<Sourced::Machine>]
       # @param path [String] a state's path, as Machine.to_h ids it
       # @param topology [Array<#to_h>] Sourced.topology's nodes
-      # @return [EventFlow]
+      # @return [FlowGraph]
       def build(machine, path, topology)
         rows = MachineChart.rows(machine.to_h)
         row = rows.find { it.path == path } || raise(ArgumentError, "#{machine} has no state #{path.inspect}")
@@ -55,6 +60,7 @@ module Sourced
 
         seeds = sliced.select { it[:group_id] == group && it[:type] != 'event' }.map { it[:id] }
         entry = state_type(machine, path) unless row.type == 'initial'
+        arriving = []
         if entry
           # What moves the machine in, from elsewhere: only that move drawn.
           arriving = topology.map(&:to_h).select do |node|
@@ -63,7 +69,15 @@ module Sourced
           sliced += arriving.map { it.merge(produces: [entry], consumes: [], tags: []) }
         end
 
-        EventFlow.build(sliced, group, max_depth: 5, seeds:, entry:)
+        # How it gets in first, then what it takes here.
+        context = arriving.map { it[:id] }
+        # Built for the state's event, when it has one.
+        # Kept to what leads to and follows from the state's event, the
+        # commands it takes itself and its own automations: not what only its
+        # enclosing states take or do.
+        automations = sliced.select { it[:group_id] == group && it[:type] == 'automation' && it[:state] == path }
+        lineage = [entry, *row.own.map { it[:event] }, *automations.map { it[:id] }].compact
+        FlowGraph.build(sliced, group, starts: [*context, *(entry ? [entry] : []), *seeds], context:, focus: [entry].compact, lineage:)
       end
 
       private

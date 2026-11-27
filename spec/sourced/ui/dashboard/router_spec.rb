@@ -328,8 +328,9 @@ RSpec.describe Sourced::UI::Dashboard::App do
       get '/reactors/test_projector'
       expect(last_response.status).to eq(200)
       expect(last_response.body).to include('TestProjector', 'kind-badge--projector', 'router_test.event', 'thing_id')
-      expect(last_response.body).to include('class="event-model"', 'event-model__node--readmodel')
-      expect(last_response.body).to include('data-bind:schemas', 'em-arrow-schemas', '>thing_id<')
+      expect(last_response.body).to include('class="flow-diagram flow-diagram--right"', 'flow-diagram__node--readmodel')
+      # An event's box opens its schema, as MessageName does.
+      expect(last_response.body).to include('data-message-type="router_test.event"', "showMessageSchema(el, 'side'), @get(", "evt.key === ' '")
     end
 
     it "shows a machine's statechart, its states and their commands" do
@@ -362,9 +363,9 @@ RSpec.describe Sourced::UI::Dashboard::App do
       body = last_response.body
       expect(body).to match(/is-active" id="sc-on"/)
       expect(body).to include('Accepts', 'Refuses', '>Install<')
-      # What it takes there, as an event model: Dim stays. (Its data event,
+      # What it takes there, as flows: Dim stays. (Its data event,
       # Dimmed, isn't in Sourced.topology: handlers don't declare data events.)
-      expect(body).to include('class="event-model"', '>Dim<', '>stays<')
+      expect(body).to include('class="flow-diagram flow-diagram--right"', '>Dim<', '>stays<')
     end
 
     it "streams updates to the reactor's consumer group card" do
