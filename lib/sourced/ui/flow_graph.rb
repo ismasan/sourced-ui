@@ -14,7 +14,9 @@ module Sourced
     # the reactions to them, the commands those dispatch, and on. A loop only
     # reactions dispatch into (a retry, a timer's tick) has no initiator: a
     # step of the reactor nothing reaches is reached from a command (the
-    # reactor's first) that reaches it.
+    # reactor's first) that reaches it. Of that, it keeps only the reactor's
+    # lineage: what leads to its steps and what follows from them, not a
+    # sibling branch (another read model fed by an event it reads).
     #
     # A projector's reaction consumes its read model, not the event it reacts
     # to, so it's in the graph only once that event is. The event comes from
@@ -64,6 +66,10 @@ module Sourced
 
         @starts = starts ? first_of(starts.select { @by_id.key?(it) }.uniq) : roots
         reached = reach(@starts)
+        unless starts
+          reached = lineage(reached)
+          @starts = @starts.select { reached.include?(it) }
+        end
         @nodes = @all.select { reached.include?(it[:id]) }.map { node(it, reached) }
         @focus = focus ? focus.select { reached.include?(it) } : @nodes.select { it.own && it.kind != :event }.map(&:id)
         @edges = @nodes.flat_map do |node|
@@ -112,6 +118,41 @@ module Sourced
             other != start && reaches[other].include?(start) && (!reaches[start].include?(other) || j < i)
           end
         end.map(&:first)
+      end
+
+      # Of +reached+, only the reactor's steps and what leads to them or
+      # follows from them: not what only shares an ancestor with them (another
+      # read model fed by the same event). Back from a projector's reaction,
+      # its read model is kept but not followed past: what leads to the
+      # reaction is the event it reacts to, not everything the read model reads.
+      def lineage(reached)
+        steps = reached.select { step?(@by_id.fetch(it)) }
+        return reached if steps.empty?
+
+        upstream = Hash.new { |h, k| h[k] = [] }
+        reached.each { |from| downstream(from).each { upstream[it] << from if reached.include?(it) } }
+
+        ancestors = steps.to_set
+        queue = steps.dup
+        while (id = queue.shift)
+          node = @by_id.fetch(id)
+          projecting = Array(node[:consumes]).any? { @by_id.dig(it, :type) == 'readmodel' }
+          triggers = projecting ? triggers_of(node) : nil
+          preds = upstream[id]
+          if triggers
+            ancestors.merge(preds.select { @by_id.dig(it, :type) == 'readmodel' })
+            preds = triggers.select { reached.include?(it) }
+          end
+          preds.each { queue << it if ancestors.add?(it) }
+        end
+
+        descendants = steps.to_set
+        queue = steps.dup
+        while (id = queue.shift)
+          downstream(id).each { queue << it if reached.include?(it) && descendants.add?(it) }
+        end
+
+        ancestors | descendants
       end
 
       def step?(node) = node[:group_id] == @group_id && node[:type] != 'event'

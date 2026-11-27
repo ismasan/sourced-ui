@@ -150,4 +150,15 @@ RSpec.describe Sourced::UI::FlowGraph do
     expect(described_class.build(topology, 'Lists').focus).to eq(%w[lists-rm renamed-Lists-aut])
     expect(described_class.build(topology, 'Todos', focus: []).focus).to eq([])
   end
+
+  it "keeps only the reactor's lineage: what leads to its steps and follows from them, not sibling branches" do
+    lists = described_class.build(topology, 'Lists')
+    notifier = described_class.build(topology, 'Notifier')
+
+    # Calendar reads Sent too, but is neither upstream nor downstream of Lists.
+    expect(lists.nodes.map(&:id)).to contain_exactly('send', 'sent', 'rename', 'renamed', 'lists-rm', 'renamed-Lists-aut', 'notify', 'notified')
+    # Back from Lists' reaction to what it reacts to, not all its read model reads.
+    expect(notifier.nodes.map(&:id)).to contain_exactly('rename', 'renamed', 'lists-rm', 'renamed-Lists-aut', 'notify', 'notified')
+    expect(notifier.starts).to eq(%w[rename])
+  end
 end
