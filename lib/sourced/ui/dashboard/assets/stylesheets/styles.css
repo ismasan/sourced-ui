@@ -2312,6 +2312,9 @@ a.reactor-pill:hover { border-color: var(--teal-600); border-left-color: var(--t
   .statechart { min-width: calc(var(--sc-w) * 0.8); }
 }
 .reactor-panel__chart--plain { padding: 0; background: white; }
+/* Flows run down the column, as long as they are: the panel scrolls. */
+.reactor-panel__chart--flow { max-height: none; overflow-x: auto; overflow-y: visible; background: white; }
+.reactor-panel__chart--flow .flow-diagram { margin: 0 auto; }
 
 .reactor-panel__section {
   margin-top: 1rem;

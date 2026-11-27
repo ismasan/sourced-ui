@@ -81,12 +81,16 @@ module Sourced
             end
           end
 
+          # Its flows, top to bottom to fit the column. A command or event's
+          # box opens its schema.
           def render_event_model
-            flow = EventFlow.build(@topology, @entry.group_id)
-            return if flow.empty?
+            graph = FlowGraph.build(@topology, @entry.group_id)
+            return if graph.empty?
 
-            figure(class: 'reactor-panel__chart reactor-panel__chart--plain') do
-              render Sourced::UI::Components::EventModel.new(flow, href:, title: "#{@entry.label} event model")
+            schema = ->(node) { %i[command event].include?(node.kind) ? MessageName.opener(helpers, node.id) : {} }
+            figure(class: 'reactor-panel__chart reactor-panel__chart--flow') do
+              render Sourced::UI::Components::FlowDiagram.new(graph, href:, title: "#{@entry.label} flows", id: 'panel-flow',
+                                                                     node_data: schema, direction: :down)
             end
           end
 

@@ -20,6 +20,17 @@ module Sourced
           javascript 'messages/message_schema.js', path: 'message_schema.js'
 
 
+          # The +data-+ attributes opening +type+'s schema in the dialog,
+          # beside the element they're on, on a click or Enter: for elements
+          # other than the name, such as a FlowDiagram's boxes.
+          # @param helpers [#url] the request's helpers
+          def self.opener(helpers, type)
+            url = helpers.url("/messages/schema?type=#{Rack::Utils.escape(type)}")
+            open = "showMessageSchema(el); @get(#{url.to_json})"
+            { 'message-type' => type, 'indicator:message-schema-loading' => true,
+              'on:click' => open, 'on:keydown' => "evt.key === 'Enter' && (#{open})" }
+          end
+
           # @param type [String] the message's type, as Sourced::Message.registry has it
           # @param text [String, nil] what to show; its class's name by default
           # @param kind [Symbol, String, nil] :command or :event, for its colour

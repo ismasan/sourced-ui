@@ -192,14 +192,7 @@ module Sourced
 
           # A command or event's box opens its payload schema in MessageName's
           # dialog, beside it, on a click or Enter.
-          def schema_data(node)
-            return {} unless %i[command event].include?(node.kind)
-
-            url = helpers.url("/messages/schema?type=#{Rack::Utils.escape(node.id)}")
-            open = "showMessageSchema(el); @get(#{url.to_json})"
-            { 'message-type' => node.id, 'indicator:message-schema-loading' => true,
-              'on:click' => open, 'on:keydown' => "evt.key === 'Enter' && (#{open})" }
-          end
+          def schema_data(node) = %i[command event].include?(node.kind) ? MessageName.opener(helpers, node.id) : {}
 
           def render_handlers
             render_flow

@@ -74,7 +74,7 @@ RSpec.describe Sourced::UI::FlowGraph do
 
     expect(graph.starts).to eq([SpecShop::PlaceOrder.type])
     expect(graph.nodes.map(&:id)).to include(SpecShop::ConfirmOrder.type, SpecShop::PaymentCharged.type)
-    expect(html).to include('class="flow-diagram"', 'matrix(0 1 1 0 0 0)', '>PlaceOrder<', '>ChargePayment<')
+    expect(html).to include('class="flow-diagram flow-diagram--right"', 'matrix(0 1 1 0 0 0)', '>PlaceOrder<', '>ChargePayment<')
   end
 
   it 'ends a loop running far back at a proxy of where it goes back to' do
@@ -120,5 +120,19 @@ RSpec.describe Sourced::UI::FlowGraph do
       expect(html).to include(%(data-on:click="open('rename')"), 'is-clickable')
       expect(html).not_to match(%r{<a href="/r"[^>]*>\s*<g[^>]*>\s*<title>command})
     end
+  end
+
+  it 'draws top to bottom, as LayeredLayout lays out, or refuses another direction' do
+    graph = described_class.build(topology, 'Todos')
+    down = Sourced::UI::Components::FlowDiagram.new(graph, direction: :down).call
+    right = Sourced::UI::Components::FlowDiagram.new(graph).call
+    size = ->(html) { html[/width="(\d+)" height="(\d+)"/].scan(/\d+/).map(&:to_i) }
+
+    expect(down).to include('flow-diagram--down')
+    expect(down).not_to include('matrix(')
+    # Taller than wide down, wider than tall across.
+    expect(size.(down).then { |w, h| h > w }).to be(true)
+    expect(size.(right).then { |w, h| w > h }).to be(true)
+    expect { Sourced::UI::Components::FlowDiagram.new(graph, direction: :left) }.to raise_error(ArgumentError)
   end
 end

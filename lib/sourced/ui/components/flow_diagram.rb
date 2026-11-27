@@ -8,15 +8,17 @@ require 'sourced/ui/flow_graph'
 module Sourced
   module UI
     module Components
-      # Draws a FlowGraph left to right, in SVG, as a layered graph with event
+      # Draws a FlowGraph left to right (or top to bottom), in SVG, as a layered graph with event
       # modeling's colours: commands blue, events orange, read models green,
       # and automations (reactions) with a robot. Each node once, however
       # many lead to it, so flows branch and meet rather than queue up in a
       # timeline.
       #
-      # LayeredLayout lays out top to bottom: the graph goes in with each box's
-      # width and height swapped, and comes out transposed, x for y. The edges
-      # are drawn in its own space, under a transform that swaps the axes.
+      # LayeredLayout lays out top to bottom: +direction: :down+ draws what it
+      # gives. Left to right (+:right+, the default), the graph goes in with
+      # each box's width and height swapped, and comes out transposed, x for
+      # y; the edges are drawn in the layout's space, under a transform that
+      # swaps the axes.
       #
       # Cycles: LayeredLayout ranks the graph from its +starts+, and an edge
       # closing a cycle runs back against the flow, dashed. One running back
@@ -49,8 +51,12 @@ module Sourced
         # @param title [String] accessible name for the drawing
         # @param id [String] tells apart the drawings on one page
         # @param node_data [#call, nil] a FlowGraph::Node => more +data-+ attributes for its box
-        def initialize(graph, href: nil, title: "#{graph.group_id} flows", id: 'flow', node_data: nil)
+        # @param direction [:right, :down] the way flows run
+        def initialize(graph, href: nil, title: "#{graph.group_id} flows", id: 'flow', node_data: nil, direction: :right)
+          raise ArgumentError, "direction is :right or :down, not #{direction.inspect}" unless %i[right down].include?(direction)
+
           @graph = graph
+          @across = direction == :right
           @href = href
           @node_data = node_data
           @title = title
@@ -65,10 +71,11 @@ module Sourced
         def view_template
           return if @graph.empty?
 
-          # Transposed: the layout's height is the drawing's width.
-          w = (@layout.height + MARGIN * 2).ceil
-          h = (@layout.width + MARGIN * 2).ceil
-          svg(class: 'flow-diagram', viewBox: "#{-MARGIN} #{-MARGIN} #{w} #{h}", width: w, height: h,
+          # Left to right, transposed: the layout's height is the drawing's width.
+          lw, lh = @across ? [@layout.height, @layout.width] : [@layout.width, @layout.height]
+          w = (lw + MARGIN * 2).ceil
+          h = (lh + MARGIN * 2).ceil
+          svg(class: "flow-diagram flow-diagram--#{@across ? 'right' : 'down'}", viewBox: "#{-MARGIN} #{-MARGIN} #{w} #{h}", width: w, height: h,
               role: 'img', aria: { label: @title }) do |s|
             s.title { @title }
             s.style { highlight_rules }
@@ -80,8 +87,8 @@ module Sourced
                 end
               end
             end
-            # The layout's space, x for y.
-            s.g(transform: 'matrix(0 1 1 0 0 0)') do
+            # The layout's space, left to right x for y.
+            s.g(transform: (@across ? 'matrix(0 1 1 0 0 0)' : nil)) do
               @edges.each { draw_edge(s, it) }
             end
             @graph.nodes.each { draw_node(s, it) }
@@ -143,9 +150,10 @@ module Sourced
         end
 
         def layout
-          # Swapped: across a rank is the drawing's height.
-          nodes = @graph.nodes.map { LayeredLayout::Node.new(id: it.id, w: BOX_H, h: BOX_W, extra: 0, round: false) }
-          nodes += @proxies.map { LayeredLayout::Node.new(id: it.id, w: PROXY_H, h: BOX_W, extra: 0, round: false) }
+          # Left to right, swapped: across a rank is the drawing's height.
+          size = ->(h) { @across ? { w: h, h: BOX_W } : { w: BOX_W, h: } }
+          nodes = @graph.nodes.map { LayeredLayout::Node.new(id: it.id, **size.(BOX_H), extra: 0, round: false) }
+          nodes += @proxies.map { LayeredLayout::Node.new(id: it.id, **size.(PROXY_H), extra: 0, round: false) }
           edges = @edges.map { |i, from, to, _| LayeredLayout::Edge.new(id: i, from:, to:, label_w: 0, label_h: GAP) }
           LayeredLayout.new(nodes, edges, starts: @graph.starts)
         end
@@ -153,7 +161,7 @@ module Sourced
         # The box's top left, in the drawing.
         def at(id)
           box = @layout.boxes.fetch(id)
-          [box.y, box.x]
+          @across ? [box.y, box.x] : [box.x, box.y]
         end
 
         def draw_edge(s, (i, from, _to, back))
