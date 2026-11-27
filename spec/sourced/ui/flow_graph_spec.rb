@@ -141,7 +141,7 @@ RSpec.describe Sourced::UI::FlowGraph do
     html = Sourced::UI::Components::FlowDiagram.new(graph).call
 
     expect(graph.focus).to eq(%w[renamed])
-    expect(html.scan('flow-diagram__halo').size).to eq(1)
+    expect(html.scan('is-focus').size).to eq(1)
     expect(html).to match(/is-focus"[^>]*aria-current="true"[^>]*><title>event: renamed\n/)
   end
 end

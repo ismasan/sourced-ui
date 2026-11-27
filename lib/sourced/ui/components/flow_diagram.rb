@@ -33,7 +33,7 @@ module Sourced
       # node fades what doesn't list it.
       #
       # The graph's +focus+, the messages it's built for, are marked with a
-      # halo and +aria-current+. A +node_data+ hook adds more +data-+
+      # thicker border, in their own colour, and +aria-current+. A +node_data+ hook adds more +data-+
       # attributes to a node, such as a click opening its message's schema.
       class FlowDiagram < Sidereal::Components::BaseComponent
         BOX_W = 132
@@ -44,7 +44,6 @@ module Sourced
         CHAR_W = 6.4
         LINE_H = 13
         MAX_BACK = 2       # ranks an edge may run back before it ends at a proxy
-        HALO = 4           # around a node the graph is built for
 
         KIND_LABELS = { command: 'command', event: 'event', readmodel: 'read model', automation: 'reaction' }.freeze
 
@@ -195,7 +194,6 @@ module Sourced
           group = proc do
             s.g(class: classes.join(' '), **(href ? {} : picks)) do
               s.title { ["#{node.kind}: #{node.name}", node.id, "from #{node.group_label}", *node.tags, *('what this is built for' if focus)].join("\n") }
-              s.rect(x: x - HALO, y: y - HALO, width: BOX_W + HALO * 2, height: BOX_H + HALO * 2, rx: 4 + HALO, class: 'flow-diagram__halo') if focus
               s.rect(x:, y:, width: BOX_W, height: BOX_H, rx: 4, class: 'flow-diagram__box')
               if node.kind == :automation
                 robot(s, x + 8, y + 6)
