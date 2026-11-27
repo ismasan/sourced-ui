@@ -96,8 +96,8 @@ RSpec.describe Sourced::UI::FlowGraph do
   end
 
   describe 'picking a node out' do
-    # A node's [token, upstream tokens], by the name in its title.
-    def picks(html, name) = html.match(/data-node="(\w+)" data-line="([^"]*)"[^>]*><title>\w+: #{name}\n/).captures
+    # A node's [token, branch tokens], by the name in its aria-label.
+    def picks(html, name) = html.match(/data-node="(\w+)" data-line="([^"]*)"[^>]*aria-label="\w+: #{name},/).captures
 
     it "lists on each node the nodes whose branch it's on, by edges running forward" do
       nodes = [cmd('c', 'L', %w[e]), evt('e', 'L'), aut('again', 'L', %w[e], %w[c]), rm('r', 'L', %w[e], [])]
@@ -152,7 +152,7 @@ RSpec.describe Sourced::UI::FlowGraph do
       html = Sourced::UI::Components::FlowDiagram.new(described_class.build(topology, 'Notifier'), href: ->(_) { '/r' }, node_data: data).call
 
       expect(html).to include(%(data-on:click="open('rename')"), 'is-clickable')
-      expect(html).not_to match(%r{<a href="/r"[^>]*>\s*<g[^>]*>\s*<title>command})
+      expect(html).not_to match(%r{<a href="/r"[^>]*aria-label="command})
     end
   end
 
@@ -176,7 +176,9 @@ RSpec.describe Sourced::UI::FlowGraph do
 
     expect(graph.focus).to eq(%w[renamed])
     expect(html.scan('is-focus').size).to eq(1)
-    expect(html).to match(/is-focus"[^>]*aria-current="true"[^>]*><title>event: renamed\n/)
+    expect(html).to match(/is-focus"[^>]*aria-label="event: renamed, [^"]*what this is built for" aria-current="true"/)
+    # Named by aria-label: a <title> would show as a tooltip over the diagram.
+    expect(html).not_to include('<title>')
   end
 
   it "marks the reactor's own steps, not the events they append, unless told what it's built for" do

@@ -85,8 +85,7 @@ module Sourced
           w = (lw + MARGIN * 2).ceil
           h = (lh + MARGIN * 2).ceil
           svg(class: "flow-diagram flow-diagram--#{@across ? 'right' : 'down'}", viewBox: "#{-MARGIN} #{-MARGIN} #{w} #{h}", width: w, height: h,
-              role: 'img', aria: { label: @title }) do |s|
-            s.title { @title }
+              role: 'group', aria: { label: @title }) do |s|
             s.style { highlight_rules }
             s.defs do
               %w[forward back].each do |kind|
@@ -249,11 +248,13 @@ module Sourced
           # Messages open their schema rather than their reactor's page.
           href = !node.own && extra.empty? && @href&.call(node.group_id)
           picks = { data: { node: @token.fetch(node.id), line: line(node.id), **extra } }
-          picks[:aria] = { current: 'true' } if focus
+          # Named with aria-label, not a <title>: browsers show a title as a
+          # tooltip over the diagram.
+          label = ["#{node.kind}: #{node.name}", "from #{node.group_label}", *node.tags, *('what this is built for' if focus)].join(', ')
+          picks[:aria] = { label:, **(focus ? { current: 'true' } : {}) }
           picks[:tabindex] = 0 unless href
           group = proc do
             s.g(class: classes.join(' '), **(href ? {} : picks)) do
-              s.title { ["#{node.kind}: #{node.name}", node.id, "from #{node.group_label}", *node.tags, *('what this is built for' if focus)].join("\n") }
               s.rect(x:, y:, width: BOX_W, height: BOX_H, rx: 4, class: 'flow-diagram__box')
               if node.kind == :automation
                 robot(s, x + 8, y + 6)
@@ -279,8 +280,7 @@ module Sourced
           x, y = at(proxy.id)
           target = @nodes.fetch(proxy.target)
           s.g(class: "flow-diagram__node flow-diagram__node--#{target.kind} flow-diagram__node--proxy", tabindex: 0,
-              data: { node: @token.fetch(proxy.id), line: line(proxy.id) }) do
-            s.title { "Back to #{target.name}, earlier in the flow" }
+              data: { node: @token.fetch(proxy.id), line: line(proxy.id) }, aria: { label: "Back to #{target.name}, earlier in the flow" }) do
             s.rect(x:, y:, width: BOX_W, height: PROXY_H, rx: 4, class: 'flow-diagram__box')
             s.text(x: x + 8, y: y + 21, class: 'flow-diagram__name') { truncate("↻ #{display_name(target)}", BOX_W - 16) }
           end
