@@ -288,7 +288,7 @@ RSpec.describe Sourced::UI::Dashboard::Components::ReactorPanel do
     expect(render(SpecShop::Orders.group_id)).to include('SpecShop::PlaceOrder', '→ SpecShop::OrderPlaced')
     # Its flows top to bottom, a message's box opening its schema.
     expect(html).not_to include('matrix(0 1 1 0 0 0)')
-    expect(html).to include(%(data-message-type="#{SpecShop::ChargePayment.type}"), 'showMessageSchema(el)')
+    expect(html).to include(%(data-message-type="#{SpecShop::ChargePayment.type}"), "showMessageSchema(el, 'side')")
   end
 
   it "lists a namespace's reactors, each opening its own panel" do
