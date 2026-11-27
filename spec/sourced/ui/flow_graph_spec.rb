@@ -197,4 +197,37 @@ RSpec.describe Sourced::UI::FlowGraph do
     expect(notifier.nodes.map(&:id)).to contain_exactly('rename', 'renamed', 'lists-rm', 'renamed-Lists-aut', 'notify', 'notified')
     expect(notifier.starts).to eq(%w[rename])
   end
+
+  describe 'cut short' do
+    # A chain of n commands, each appending an event a reaction turns into the next.
+    def chain(group, n, from: nil)
+      n.times.flat_map do |i|
+        nxt = i + 1 < n ? ["#{group}-c#{i + 1}"] : []
+        [cmd("#{group}-c#{i}", group, ["#{group}-e#{i}"]), evt("#{group}-e#{i}", group),
+         aut("#{group}-a#{i}", group, ["#{group}-e#{i}"], nxt)]
+      end
+    end
+
+    it "isn't, for another reactor's long flow" do
+      graph = described_class.build([cmd('a', 'A', %w[ea]), evt('ea', 'A'), *chain('B', 80)], 'A')
+
+      expect(graph.nodes.map(&:id)).to eq(%w[a ea])
+      expect(graph.truncated?).to be(false)
+    end
+
+    it "keeps the reactor's steps and what's nearest them, however far down the flow they are" do
+      # Z's reaction is at the end of a 60-step chain: 180 nodes before it.
+      t = [*chain('B', 60), aut('z', 'Z', ['B-e59'], %w[zc]), cmd('zc', 'Z', %w[ze]), evt('ze', 'Z')]
+      graph = described_class.build(t, 'Z')
+      ids = graph.nodes.map(&:id)
+
+      expect(graph.truncated?).to be(true)
+      expect(ids.size).to eq(described_class::MAX_NODES)
+      expect(ids).to include('z', 'zc', 'ze', 'B-e59', 'B-c59')
+      expect(ids).not_to include('B-c0')
+      expect(graph.focus).to include('z', 'zc')
+      # Its initiator cut, it's drawn from what's left.
+      expect(Sourced::UI::Components::FlowDiagram.new(graph).call).to include('flow-diagram__node')
+    end
+  end
 end

@@ -65,16 +65,18 @@ module Sourced
         @consumers = Hash.new { |h, k| h[k] = [] }
         topology.each { |node| Array(node[:consumes]).each { @consumers[it] << node[:id] } }
         @produced = topology.flat_map { Array(it[:produces]) }.to_set
-        @truncated = false
+        @triggers = {}
 
         @starts = starts ? first_of(starts.select { @by_id.key?(it) }.uniq) : roots
         reached = reach(@starts)
         around = lineage || (starts ? [] : reached.select { step?(@by_id.fetch(it)) })
         around = around.select { reached.include?(it) }
-        unless around.empty?
-          reached = lineage(reached, around)
-          @starts = @starts.select { reached.include?(it) }
-        end
+        reached = lineage(reached, around) unless around.empty?
+        # Cut down only once trimmed to the lineage, keeping what's nearest
+        # what it's built around: the reactor's steps can't be what's cut.
+        @truncated = reached.size > MAX_NODES
+        reached = nearest(reached, around.empty? ? @starts : around) if @truncated
+        @starts = @starts.select { reached.include?(it) }
         @nodes = @all.select { reached.include?(it[:id]) }.map { node(it, reached) }
         @focus = focus ? focus.select { reached.include?(it) } : @nodes.select { it.own && it.kind != :event }.map(&:id)
         @edges = @nodes.flat_map do |node|
@@ -171,20 +173,46 @@ module Sourced
       def step?(node) = node[:group_id] == @group_id && node[:type] != 'event'
 
       # The ids reachable from +starts+, a projector's reactions only once
-      # what they react to is. Reached again until nothing more is: a read
-      # model may be reached before the event one of its reactions reacts to.
+      # what they react to is: a read model may be reached before the event
+      # one of its reactions reacts to, so the reaction waits for it.
       def reach(starts)
         reached = starts.to_set
-        loop do
-          added = reached.flat_map { downstream(it) }.uniq.reject { reached.include?(it) }.select { reacts?(it, reached) }
-          break reached if added.empty?
+        queue = starts.dup
+        waiting = Hash.new { |h, k| h[k] = [] } # trigger => reactions waiting on it
+        take = ->(id) { queue << id if reached.add?(id) }
+        while (id = queue.shift)
+          downstream(id).each do |next_id|
+            next if reached.include?(next_id)
 
-          if reached.size + added.size > MAX_NODES
-            @truncated = true
-            break reached
+            triggers = triggers_of(@by_id.fetch(next_id))
+            if triggers && triggers.none? { reached.include?(it) }
+              triggers.each { waiting[it] << next_id }
+            else
+              take.(next_id)
+            end
           end
-          reached.merge(added)
+          waiting.delete(id)&.each(&take)
         end
+        reached
+      end
+
+      # MAX_NODES of +reached+, those nearest +seeds+ by edges either way.
+      def nearest(reached, seeds)
+        near = Hash.new { |h, k| h[k] = [] }
+        reached.each do |from|
+          downstream(from).each do |to|
+            next unless reached.include?(to)
+
+            near[from] << to
+            near[to] << from
+          end
+        end
+        kept = seeds.select { reached.include?(it) }.first(MAX_NODES).to_set
+        queue = kept.to_a
+        while (id = queue.shift) && kept.size < MAX_NODES
+          near[id].each { queue << it if kept.size < MAX_NODES && kept.add?(it) }
+        end
+        kept
       end
 
       def downstream(id)
@@ -192,13 +220,10 @@ module Sourced
         (Array(node[:produces]) + @consumers[id]).select { @by_id.key?(it) }.uniq
       end
 
-      def reacts?(id, reached)
-        triggers = triggers_of(@by_id.fetch(id))
-        triggers.nil? || triggers.any? { reached.include?(it) }
-      end
-
       # The events an automation reacts to, or nil for anything not one.
-      def triggers_of(node)
+      def triggers_of(node) = @triggers.fetch(node[:id]) { @triggers[node[:id]] = find_triggers(node) }
+
+      def find_triggers(node)
         return unless node[:type] == 'automation'
         return Array(node[:reacts_to]) if node[:reacts_to]
 
