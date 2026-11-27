@@ -12,11 +12,13 @@ RSpec.describe Sourced::UI::MachineSlice do
   def named(flow, name) = flow.nodes.find { it.name.end_with?("::#{name}") || it.name == name }
   def starting(flow) = flow.starts.map { |id| flow.nodes.find { it.id == id } }
 
-  it "takes the commands a state accepts, its own and its enclosing states', and nothing else of the machine" do
+  it "takes the commands the state accepts itself, and what its event leads to, nothing else of the machine" do
     flow = slice('checkout.paying')
     commands = flow.nodes.select { it.kind == :command }.map { it.name.split('::').last }
 
-    expect(commands).to contain_exactly('Pay', 'Expire', 'Cancel', 'Replan')
+    # Pay is paying's own; its timer dispatches Expire. Cancel and Replan are
+    # only its enclosing states', a sibling branch of the state's.
+    expect(commands).to contain_exactly('Pay', 'Expire')
   end
 
   it 'draws the state changes a command can make from here as events' do
@@ -24,7 +26,8 @@ RSpec.describe Sourced::UI::MachineSlice do
     events = flow.nodes.select { it.kind == :event }.map { it.name.split('::').last }
     pay = named(flow, 'Pay')
 
-    expect(events).to include('Paid', 'Cancelled', 'Planning')
+    expect(events).to include('Paid', 'Expired')
+    expect(events).not_to include('Cancelled', 'Planning')
     # Pay moves to paid from here; booked follows only through on_final, not from Pay itself.
     expect(flow.edges.map { [it.from, it.to] }).to include([pay.id, 'spec_trip.runtime.checkout.paid'])
     expect(pay.tags).to eq([])
@@ -53,7 +56,7 @@ RSpec.describe Sourced::UI::MachineSlice do
     flow = slice('planning.flight.initial')
     commands = flow.nodes.select { it.kind == :command }.map { it.name.split('::').last }
 
-    expect(commands).to contain_exactly('ChooseFlight', 'Cancel')
+    expect(commands).to contain_exactly('ChooseFlight')
   end
 
   it "starts with how the machine gets into the state: its own event, after what appends it, not followed" do

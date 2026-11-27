@@ -21,6 +21,11 @@ module Sourced
     # as its handlers don't declare them. One that may leave the machine where
     # it is (a data-only command, or one that may not move) is tagged +stays+:
     # staying appends no state event to draw.
+    #
+    # Of that, only the lineage of the state's event and of the commands the
+    # state takes itself is kept: what leads to them and what follows from
+    # them. What only enclosing states take (and what hangs off it) is left
+    # out unless it's in that lineage.
     module MachineSlice
       extend self
 
@@ -67,7 +72,10 @@ module Sourced
         # How it gets in first, then what it takes here.
         context = arriving.map { it[:id] }
         # Built for the state's event, when it has one.
-        FlowGraph.build(sliced, group, starts: [*context, *(entry ? [entry] : []), *seeds], context:, focus: [entry].compact)
+        # Kept to what leads to and follows from the state's event and the
+        # commands it takes itself: not what only its enclosing states take.
+        lineage = [entry, *row.own.map { it[:event] }].compact
+        FlowGraph.build(sliced, group, starts: [*context, *(entry ? [entry] : []), *seeds], context:, focus: [entry].compact, lineage:)
       end
 
       private

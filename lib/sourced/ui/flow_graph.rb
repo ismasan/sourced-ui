@@ -17,6 +17,8 @@ module Sourced
     # reactor's first) that reaches it. Of that, it keeps only the reactor's
     # lineage: what leads to its steps and what follows from them, not a
     # sibling branch (another read model fed by an event it reads).
+    # Built with +starts+, +lineage+ names whose lineage it keeps the same way
+    # instead (a machine state's event and the commands it takes itself).
     #
     # A projector's reaction consumes its read model, not the event it reacts
     # to, so it's in the graph only once that event is. The event comes from
@@ -47,14 +49,15 @@ module Sourced
       # @param starts [Array<String>, nil] the ids to start from (the initiators reaching the reactor, if nil)
       # @param context [Array<String>] ids shown, but not as the reactor's own
       # @param focus [Array<String>, nil] ids of the nodes it's built for (the reactor's own steps, if nil)
+      # @param lineage [Array<String>, nil] ids whose ancestors and descendants it keeps, alone (the reactor's steps, if nil; with +starts+, everything reached)
       # @return [FlowGraph]
-      def self.build(topology, group_id, starts: nil, context: [], focus: nil)
-        new(topology.map(&:to_h), group_id, starts:, context:, focus:)
+      def self.build(topology, group_id, starts: nil, context: [], focus: nil, lineage: nil)
+        new(topology.map(&:to_h), group_id, starts:, context:, focus:, lineage:)
       end
 
       attr_reader :group_id, :nodes, :edges, :starts, :focus
 
-      def initialize(topology, group_id, starts: nil, context: [], focus: nil)
+      def initialize(topology, group_id, starts: nil, context: [], focus: nil, lineage: nil)
         @group_id = group_id
         @context = context.to_set
         @all = topology
@@ -66,8 +69,10 @@ module Sourced
 
         @starts = starts ? first_of(starts.select { @by_id.key?(it) }.uniq) : roots
         reached = reach(@starts)
-        unless starts
-          reached = lineage(reached)
+        around = lineage || (starts ? [] : reached.select { step?(@by_id.fetch(it)) })
+        around = around.select { reached.include?(it) }
+        unless around.empty?
+          reached = lineage(reached, around)
           @starts = @starts.select { reached.include?(it) }
         end
         @nodes = @all.select { reached.include?(it[:id]) }.map { node(it, reached) }
@@ -120,15 +125,12 @@ module Sourced
         end.map(&:first)
       end
 
-      # Of +reached+, only the reactor's steps and what leads to them or
-      # follows from them: not what only shares an ancestor with them (another
-      # read model fed by the same event). Back from a projector's reaction,
+      # Of +reached+, only +steps+ (the reactor's, or the focus) and what
+      # leads to them or follows from them: not what only shares an ancestor
+      # with them (another read model fed by the same event). Back from a projector's reaction,
       # its read model is kept but not followed past: what leads to the
       # reaction is the event it reacts to, not everything the read model reads.
-      def lineage(reached)
-        steps = reached.select { step?(@by_id.fetch(it)) }
-        return reached if steps.empty?
-
+      def lineage(reached, steps)
         upstream = Hash.new { |h, k| h[k] = [] }
         reached.each { |from| downstream(from).each { upstream[it] << from if reached.include?(it) } }
 
