@@ -22,14 +22,17 @@ module Sourced
 
           # The +data-+ attributes opening +type+'s schema in the dialog,
           # beside the element they're on (not below it, covering what's
-          # under it), on a click or Enter: for elements other than the name,
+          # under it), on a click, Enter or Space: for elements other than the name,
           # such as a FlowDiagram's boxes.
           # @param helpers [#url] the request's helpers
           def self.opener(helpers, type)
             url = helpers.url("/messages/schema?type=#{Rack::Utils.escape(type)}")
-            open = "showMessageSchema(el, 'side'); @get(#{url.to_json})"
+            # One expression, statements joined by commas, to go after && below.
+            open = "showMessageSchema(el, 'side'), @get(#{url.to_json})"
             { 'message-type' => type, 'indicator:message-schema-loading' => true,
-              'on:click' => open, 'on:keydown' => "evt.key === 'Enter' && (#{open})" }
+              'on:click' => open,
+              # Enter or Space, as a button takes; Space without scrolling the page.
+              'on:keydown' => "(evt.key === 'Enter' || evt.key === ' ') && (evt.preventDefault(), #{open})" }
           end
 
           # @param type [String] the message's type, as Sourced::Message.registry has it
