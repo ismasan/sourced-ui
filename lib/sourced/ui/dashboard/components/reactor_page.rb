@@ -124,9 +124,28 @@ module Sourced
           end
 
           def render_flow
-            event_model_card(EventFlow.build(@topology.call, @reactor.group_id),
-                             title: "#{@reactor.group_label} event model",
-                             lead: 'What triggers it, what it decides, and what reacts downstream.')
+            graph = FlowGraph.build(@topology.call, @reactor.group_id)
+            return if graph.empty?
+
+            href = ->(group_id) { reactor_href(group_id) if @reactors.any? { it.group_id == group_id } }
+            figure(class: 'chart-card') do
+              figcaption(class: 'chart-card__bar') do
+                strong { 'Flows' }
+                span(class: 'muted') { 'Every flow it takes part in, from the command starting it to its end.' }
+                div(class: 'chart-card__tools') do
+                  ul(class: 'em-key', aria: { label: 'Key' }) do
+                    li(class: 'em-key__item em-key__item--command') { 'Command' }
+                    li(class: 'em-key__item em-key__item--event') { 'Event' }
+                    li(class: 'em-key__item em-key__item--readmodel') { 'Read model' }
+                    li(class: 'em-key__item em-key__item--automation') { 'Automation' }
+                  end
+                end
+              end
+              div(class: 'chart-card__canvas chart-card__canvas--flow') do
+                render Sourced::UI::Components::FlowDiagram.new(graph, href:, title: "#{@reactor.group_label} flows")
+              end
+              p(class: 'chart-card__note') { 'Cut short: there is more downstream than shown.' } if graph.truncated?
+            end
           end
 
           def event_model_card(flow, title:, lead:)

@@ -328,8 +328,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
       get '/reactors/test_projector'
       expect(last_response.status).to eq(200)
       expect(last_response.body).to include('TestProjector', 'kind-badge--projector', 'router_test.event', 'thing_id')
-      expect(last_response.body).to include('class="event-model"', 'event-model__node--readmodel')
-      expect(last_response.body).to include('data-bind:schemas', 'em-arrow-schemas', '>thing_id<')
+      expect(last_response.body).to include('class="flow-diagram"', 'flow-diagram__node--readmodel')
     end
 
     it "shows a machine's statechart, its states and their commands" do
