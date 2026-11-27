@@ -78,6 +78,12 @@ RSpec.describe Sourced::UI::MachineSlice do
     expect(light.focus).to be_empty
   end
 
+  it "keeps the state's own automations, though its event and commands don't lead to them" do
+    flow = slice('planning')
+
+    expect(flow.nodes.map(&:id)).to include('planning-done-spec_trip-aut')
+  end
+
   it 'refuses a state the machine has not got' do
     expect { slice('nope') }.to raise_error(ArgumentError, /no state "nope"/)
   end
