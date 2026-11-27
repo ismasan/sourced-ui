@@ -43,6 +43,7 @@ RSpec.describe Sourced::UI::MachineSlice do
 
     expect(timer.name).to eq('actions(checkout.paying)')
     expect(starting(flow).first.name).to eq('SpecTrip::Checkout::Paying')
+    expect(flow.focus).to eq([starting(flow).first.id])
     # Drawn after the state's event, not started from: what it leads to follows it.
     expect(flow.starts).not_to include(timer.id, 'spec_trip.checkout.expire')
     expect(flow.edges.map { [it.from, it.to] }).to include([timer.id, 'spec_trip.checkout.expire'])
@@ -71,6 +72,7 @@ RSpec.describe Sourced::UI::MachineSlice do
     light = Sourced::UI::MachineSlice.build(SpecLight, 'initial', Sourced::Topology.build([SpecLight]))
 
     expect(light.nodes.map { [it.name, it.own] }).to eq([['SpecLight::Install', true], ['SpecLight::Off', true]])
+    expect(light.focus).to be_empty
   end
 
   it 'refuses a state the machine has not got' do

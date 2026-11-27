@@ -66,7 +66,8 @@ module Sourced
 
         # How it gets in first, then what it takes here.
         context = arriving.map { it[:id] }
-        FlowGraph.build(sliced, group, starts: [*context, *(entry ? [entry] : []), *seeds], context:)
+        # Built for the state's event, when it has one.
+        FlowGraph.build(sliced, group, starts: [*context, *(entry ? [entry] : []), *seeds], context:, focus: [entry].compact)
       end
 
       private

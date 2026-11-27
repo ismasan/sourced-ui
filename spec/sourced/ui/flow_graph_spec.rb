@@ -135,4 +135,13 @@ RSpec.describe Sourced::UI::FlowGraph do
     expect(size.(right).then { |w, h| w > h }).to be(true)
     expect { Sourced::UI::Components::FlowDiagram.new(graph, direction: :left) }.to raise_error(ArgumentError)
   end
+
+  it 'marks the messages the graph is built for' do
+    graph = described_class.build(topology, 'Todos', starts: %w[rename], focus: %w[renamed nope])
+    html = Sourced::UI::Components::FlowDiagram.new(graph).call
+
+    expect(graph.focus).to eq(%w[renamed])
+    expect(html.scan('flow-diagram__halo').size).to eq(1)
+    expect(html).to match(/is-focus"[^>]*aria-current="true"[^>]*><title>event: renamed\n/)
+  end
 end

@@ -30,7 +30,10 @@ module Sourced
       # what's downstream of it and fades the rest: each node and edge lists,
       # in +data-up+, the nodes it's downstream of (by edges running forward,
       # so a loop back doesn't light up the whole flow), and a rule for each
-      # node fades what doesn't list it. A +node_data+ hook adds more +data-+
+      # node fades what doesn't list it.
+      #
+      # The graph's +focus+, the messages it's built for, are marked with a
+      # halo and +aria-current+. A +node_data+ hook adds more +data-+
       # attributes to a node, such as a click opening its message's schema.
       class FlowDiagram < Sidereal::Components::BaseComponent
         BOX_W = 132
@@ -41,6 +44,7 @@ module Sourced
         CHAR_W = 6.4
         LINE_H = 13
         MAX_BACK = 2       # ranks an edge may run back before it ends at a proxy
+        HALO = 4           # around a node the graph is built for
 
         KIND_LABELS = { command: 'command', event: 'event', readmodel: 'read model', automation: 'reaction' }.freeze
 
@@ -179,15 +183,19 @@ module Sourced
           x, y = at(node.id)
           classes = ['flow-diagram__node', "flow-diagram__node--#{node.kind}"]
           classes << 'is-external' unless node.own
+          focus = @graph.focus.include?(node.id)
+          classes << 'is-focus' if focus
           extra = @node_data&.call(node) || {}
           classes << 'is-clickable' if extra.any?
           # Messages open their schema rather than their reactor's page.
           href = !node.own && extra.empty? && @href&.call(node.group_id)
           picks = { data: { node: @token.fetch(node.id), up: up(node.id), **extra } }
+          picks[:aria] = { current: 'true' } if focus
           picks[:tabindex] = 0 unless href
           group = proc do
             s.g(class: classes.join(' '), **(href ? {} : picks)) do
-              s.title { ["#{node.kind}: #{node.name}", node.id, "from #{node.group_label}", *node.tags].join("\n") }
+              s.title { ["#{node.kind}: #{node.name}", node.id, "from #{node.group_label}", *node.tags, *('what this is built for' if focus)].join("\n") }
+              s.rect(x: x - HALO, y: y - HALO, width: BOX_W + HALO * 2, height: BOX_H + HALO * 2, rx: 4 + HALO, class: 'flow-diagram__halo') if focus
               s.rect(x:, y:, width: BOX_W, height: BOX_H, rx: 4, class: 'flow-diagram__box')
               if node.kind == :automation
                 robot(s, x + 8, y + 6)

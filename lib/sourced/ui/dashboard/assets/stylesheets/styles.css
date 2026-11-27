@@ -2490,6 +2490,9 @@ button.cmd:hover { text-decoration: none; border-color: var(--slate-400); }
 .flow-diagram__node--automation .flow-diagram__box { fill: white; stroke: var(--slate-400); }
 .flow-diagram__node--automation text { fill: var(--slate-700); }
 .flow-diagram__node.is-external .flow-diagram__box { fill-opacity: 0.55; stroke-dasharray: 4 2; }
+/* What the graph is built for (a machine state's event): a teal halo, as the statechart lights the state. */
+.flow-diagram__halo { fill: none; stroke: var(--teal-600); stroke-width: 2.5; }
+.flow-diagram__node.is-focus .flow-diagram__box { stroke-width: 2; }
 .flow-diagram__node--proxy .flow-diagram__box { fill-opacity: 0.35; stroke-dasharray: 2 3; }
 .flow-diagram__link:hover .flow-diagram__box { stroke-width: 2; }
 .flow-diagram [data-up] { transition: opacity 0.12s; }
