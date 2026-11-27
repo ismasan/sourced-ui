@@ -31,9 +31,11 @@ module Sourced
       # rest: forks joining it upstream or a descendant, and sibling branches.
       # Each node lists in +data-line+ the nodes whose branch it's on, its
       # ancestors and descendants (by edges running forward, so a loop back
-      # doesn't light up the whole flow); an edge, the nodes it runs after
-      # (its source's ancestors) or leads to (its target's descendants). A
-      # rule for each node fades what doesn't list it.
+      # doesn't light up the whole flow), and each edge the nodes whose
+      # branch runs along it. A projector's reaction is on a branch through
+      # its read model only with the event it reacts to (FlowGraph#triggers):
+      # the read model may read more. A rule for each node fades what doesn't
+      # list it.
       #
       # The graph's +focus+, the nodes it's built for (the reactor's steps, or a
       # machine state's event), are marked with a
@@ -125,35 +127,81 @@ module Sourced
           end
         end
 
-        # Each node's token (n0, p0 for a proxy), and for each node the
-        # tokens of the nodes it's downstream of (+@up+) and upstream of
-        # (+@down+), itself included in both.
+        # Each node's token (n0, p0 for a proxy), and for each node and edge
+        # the tokens of the nodes whose branch it's on (+@line+, +@edge_line+).
         def trace
           @token = @graph.nodes.each_with_index.to_h { |node, i| [node.id, "n#{i}"] }
           @proxies.each_with_index { |proxy, i| @token[proxy.id] = "p#{i}" }
           out = Hash.new { |h, k| h[k] = [] }
-          @edges.each { |_, from, to, back| out[from] << to unless back }
-          @up = Hash.new { |h, k| h[k] = Set.new }
-          @down = Hash.new { |h, k| h[k] = Set.new }
-          @token.each_key do |id|
-            stack = [id]
-            seen = Set.new
-            while (at = stack.pop)
-              next unless seen.add?(at)
+          into = Hash.new { |h, k| h[k] = [] }
+          @edges.each do |i, from, to, back|
+            next if back
 
-              @up[at] << @token.fetch(id)
-              @down[id] << @token.fetch(at)
-              stack.concat(out[at])
-            end
+            out[from] << [i, to]
+            into[to] << [i, from]
+          end
+          @line = Hash.new { |h, k| h[k] = Set.new }
+          @edge_line = Hash.new { |h, k| h[k] = Set.new }
+          @token.each do |id, token|
+            up_nodes, up_edges = upstream(id, into)
+            down_nodes, down_edges = downstream(id, out, up_nodes)
+            (up_nodes | down_nodes).each { @line[it] << token }
+            (up_edges | down_edges).each { @edge_line[it] << token }
           end
         end
 
-        # The tokens of the nodes whose branch a node is on.
-        def line(id) = (@up[id] | @down[id]).to_a.join(' ')
+        # What leads to +id+, and by which edges. Back from a projector's
+        # reaction, its read model is on the branch but isn't followed past:
+        # what leads to the reaction is the event it reacts to.
+        def upstream(id, into)
+          nodes = Set[id]
+          edges = Set.new
+          queue = [id]
+          while (at = queue.shift)
+            triggers = @graph.triggers(at)
+            into[at].each do |i, from|
+              edges << i
+              if triggers && @nodes[from]&.kind == :readmodel
+                nodes << from
+                into[from].each do |j, event|
+                  next unless triggers.include?(event)
 
-        # An edge is on a node's branch if it runs from it or after it, or
-        # into it or before it: not a fork joining the branch further down.
-        def edge_line(from, to) = (@up[from] | @down[to]).to_a.join(' ')
+                  edges << j
+                  queue << event if nodes.add?(event)
+                end
+              elsif nodes.add?(from)
+                queue << from
+              end
+            end
+          end
+          [nodes, edges]
+        end
+
+        # What follows from +id+, and by which edges: from a read model into
+        # a reaction of its only when what the reaction reacts to is on the
+        # branch (+before+ it, or after), not just anything the model reads.
+        def downstream(id, out, before)
+          nodes = Set[id]
+          edges = Set.new
+          loop do
+            added = false
+            nodes.to_a.each do |from|
+              out[from].each do |i, to|
+                triggers = @graph.triggers(to) if @nodes[from]&.kind == :readmodel
+                next if triggers && triggers.none? { before.include?(it) || nodes.include?(it) }
+
+                edges << i
+                added = true if nodes.add?(to)
+              end
+            end
+            break unless added
+          end
+          [nodes, edges]
+        end
+
+        def line(id) = @line[id].to_a.join(' ')
+
+        def edge_line(i) = @edge_line[i].to_a.join(' ')
 
         def highlight_rules
           rules = @token.values.flat_map do |token|
@@ -180,12 +228,12 @@ module Sourced
           @across ? [box.y, box.x] : [box.x, box.y]
         end
 
-        def draw_edge(s, (i, from, to, back))
+        def draw_edge(s, (i, from, _to, back))
           route = @layout.routes.fetch(i)
           d = route.flat == :straight ? straight(route.points) : EdgePath.spline(route.points)
           kind = back ? 'back' : 'forward'
           s.path(d:, class: "flow-diagram__edge flow-diagram__edge--#{kind}", 'marker-end': "url(##{@id}-arrow-#{kind})",
-                 data: { line: edge_line(from, to) })
+                 data: { line: edge_line(i) })
         end
 
         def straight(((x1, y1), (x2, y2))) = "M #{x1.round(1)} #{y1.round(1)} L #{x2.round(1)} #{y2.round(1)}"

@@ -130,6 +130,23 @@ RSpec.describe Sourced::UI::FlowGraph do
       expect(edges_on.('e1')).to eq(2)
     end
 
+    it "takes a projector's reaction onto a branch through its read model only with the event it reacts to" do
+      graph = described_class.build(topology, 'Todos')
+      html = Sourced::UI::Components::FlowDiagram.new(graph).call
+      token = ->(id) { picks(html, id).first }
+      on = ->(id) { graph.nodes.map(&:id).select { picks(html, it).last.split.include?(token.(id)) } }
+
+      expect(graph.triggers('renamed-Lists-aut')).to eq(%w[renamed])
+      expect(graph.triggers('lists-rm')).to be_nil
+      # Lists reads Sent, but its reaction reacts to Renamed only.
+      expect(on.('sent')).to contain_exactly('send', 'sent', 'calendar-rm', 'lists-rm')
+      expect(on.('renamed')).to contain_exactly('rename', 'renamed', 'lists-rm', 'renamed-Lists-aut', 'notify', 'notified')
+      # Back from the reaction: its read model and what it reacts to, not all the model reads.
+      expect(on.('renamed-Lists-aut')).to contain_exactly('rename', 'renamed', 'lists-rm', 'renamed-Lists-aut', 'notify', 'notified')
+      # The read model's branch takes its reaction: Renamed leads to the model.
+      expect(on.('lists-rm')).to include('renamed-Lists-aut', 'sent', 'renamed')
+    end
+
     it 'adds what node_data gives a node, a click instead of its reactor\'s link' do
       data = ->(node) { node.kind == :command ? { 'on:click' => "open('#{node.id}')" } : {} }
       html = Sourced::UI::Components::FlowDiagram.new(described_class.build(topology, 'Notifier'), href: ->(_) { '/r' }, node_data: data).call

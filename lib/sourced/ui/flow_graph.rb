@@ -87,6 +87,19 @@ module Sourced
       # Whether the graph was cut short at MAX_NODES.
       def truncated? = @truncated
 
+      # The events a projector's reaction reacts to, or nil for any other
+      # node. Its edges come in from its read model, which may read more than
+      # it reacts to: a branch passes through the read model into it only
+      # from these.
+      # @param id [String]
+      # @return [Array<String>, nil]
+      def triggers(id)
+        node = @by_id[id]
+        return unless node && Array(node[:consumes]).any? { @by_id.dig(it, :type) == 'readmodel' }
+
+        triggers_of(node)
+      end
+
       private
 
       # The initiators whose flows reach the reactor, then a command for each
@@ -137,9 +150,7 @@ module Sourced
         ancestors = steps.to_set
         queue = steps.dup
         while (id = queue.shift)
-          node = @by_id.fetch(id)
-          projecting = Array(node[:consumes]).any? { @by_id.dig(it, :type) == 'readmodel' }
-          triggers = projecting ? triggers_of(node) : nil
+          triggers = triggers(id)
           preds = upstream[id]
           if triggers
             ancestors.merge(preds.select { @by_id.dig(it, :type) == 'readmodel' })
