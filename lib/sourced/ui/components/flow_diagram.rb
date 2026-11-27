@@ -23,6 +23,13 @@ module Sourced
       # more than MAX_BACK ranks (or from a node to itself) isn't drawn across
       # the diagram: it ends at a proxy of its target, beside where it comes
       # from (↻ and the target's name).
+      #
+      # Hovering a node, or picking it (a click, or Tab, focuses it), picks out
+      # what's downstream of it and fades the rest: each node and edge lists,
+      # in +data-up+, the nodes it's downstream of (by edges running forward,
+      # so a loop back doesn't light up the whole flow), and a rule for each
+      # node fades what doesn't list it. A +node_data+ hook adds more +data-+
+      # attributes to a node, such as a click opening its message's schema.
       class FlowDiagram < Sidereal::Components::BaseComponent
         BOX_W = 132
         BOX_H = 56
@@ -41,15 +48,18 @@ module Sourced
         # @param href [#call, nil] a node's reactor's URL from its group_id, or nil for none
         # @param title [String] accessible name for the drawing
         # @param id [String] tells apart the drawings on one page
-        def initialize(graph, href: nil, title: "#{graph.group_id} flows", id: 'flow')
+        # @param node_data [#call, nil] a FlowGraph::Node => more +data-+ attributes for its box
+        def initialize(graph, href: nil, title: "#{graph.group_id} flows", id: 'flow', node_data: nil)
           @graph = graph
           @href = href
+          @node_data = node_data
           @title = title
           @id = id
           @nodes = graph.nodes.to_h { [it.id, it] }
           @short = short_paths(graph.nodes)
           plan
           @layout = layout
+          trace
         end
 
         def view_template
@@ -61,6 +71,7 @@ module Sourced
           svg(class: 'flow-diagram', viewBox: "#{-MARGIN} #{-MARGIN} #{w} #{h}", width: w, height: h,
               role: 'img', aria: { label: @title }) do |s|
             s.title { @title }
+            s.style { highlight_rules }
             s.defs do
               %w[forward back].each do |kind|
                 s.marker(id: "#{@id}-arrow-#{kind}", viewBox: '0 0 10 10', refX: 9, refY: 5,
@@ -99,6 +110,38 @@ module Sourced
           end
         end
 
+        # Each node's token (n0, p0 for a proxy), and for each node the
+        # tokens of the nodes it's downstream of, itself included.
+        def trace
+          @token = @graph.nodes.each_with_index.to_h { |node, i| [node.id, "n#{i}"] }
+          @proxies.each_with_index { |proxy, i| @token[proxy.id] = "p#{i}" }
+          out = Hash.new { |h, k| h[k] = [] }
+          @edges.each { |_, from, to, back| out[from] << to unless back }
+          @up = Hash.new { |h, k| h[k] = Set.new }
+          @token.each_key do |id|
+            stack = [id]
+            seen = Set.new
+            while (at = stack.pop)
+              next unless seen.add?(at)
+
+              @up[at] << @token.fetch(id)
+              stack.concat(out[at])
+            end
+          end
+        end
+
+        def up(id) = @up[id].to_a.join(' ')
+
+        def highlight_rules
+          rules = @token.values.flat_map do |token|
+            faded = "[data-up]:not([data-up~=\"#{token}\"]) { opacity: 0.15; }"
+            lit = ".flow-diagram__edge[data-up~=\"#{token}\"] { stroke: var(--slate-700); stroke-width: 1.6; }"
+            [".flow-diagram:has([data-node=\"#{token}\"]:hover)", ".flow-diagram:not(:has([data-node]:hover)):has([data-node=\"#{token}\"]:focus)"]
+              .flat_map { |on| ["#{on} #{faded}", "#{on} #{lit}"] }
+          end
+          raw safe(rules.join("\n"))
+        end
+
         def layout
           # Swapped: across a rank is the drawing's height.
           nodes = @graph.nodes.map { LayeredLayout::Node.new(id: it.id, w: BOX_H, h: BOX_W, extra: 0, round: false) }
@@ -113,11 +156,12 @@ module Sourced
           [box.y, box.x]
         end
 
-        def draw_edge(s, (i, _from, _to, back))
+        def draw_edge(s, (i, from, _to, back))
           route = @layout.routes.fetch(i)
           d = route.flat == :straight ? straight(route.points) : EdgePath.spline(route.points)
           kind = back ? 'back' : 'forward'
-          s.path(d:, class: "flow-diagram__edge flow-diagram__edge--#{kind}", 'marker-end': "url(##{@id}-arrow-#{kind})")
+          s.path(d:, class: "flow-diagram__edge flow-diagram__edge--#{kind}", 'marker-end': "url(##{@id}-arrow-#{kind})",
+                 data: { up: up(from) })
         end
 
         def straight(((x1, y1), (x2, y2))) = "M #{x1.round(1)} #{y1.round(1)} L #{x2.round(1)} #{y2.round(1)}"
@@ -126,9 +170,14 @@ module Sourced
           x, y = at(node.id)
           classes = ['flow-diagram__node', "flow-diagram__node--#{node.kind}"]
           classes << 'is-external' unless node.own
-          href = !node.own && @href&.call(node.group_id)
+          extra = @node_data&.call(node) || {}
+          classes << 'is-clickable' if extra.any?
+          # Messages open their schema rather than their reactor's page.
+          href = !node.own && extra.empty? && @href&.call(node.group_id)
+          picks = { data: { node: @token.fetch(node.id), up: up(node.id), **extra } }
+          picks[:tabindex] = 0 unless href
           group = proc do
-            s.g(class: classes.join(' ')) do
+            s.g(class: classes.join(' '), **(href ? {} : picks)) do
               s.title { "#{node.kind}: #{node.name}\n#{node.id}\nfrom #{node.group_label}" }
               s.rect(x:, y:, width: BOX_W, height: BOX_H, rx: 4, class: 'flow-diagram__box')
               if node.kind == :automation
@@ -145,13 +194,14 @@ module Sourced
               end
             end
           end
-          href ? s.a(href:, class: 'flow-diagram__link', &group) : group.call
+          href ? s.a(href:, class: 'flow-diagram__link', **picks, &group) : group.call
         end
 
         def draw_proxy(s, proxy)
           x, y = at(proxy.id)
           target = @nodes.fetch(proxy.target)
-          s.g(class: "flow-diagram__node flow-diagram__node--#{target.kind} flow-diagram__node--proxy") do
+          s.g(class: "flow-diagram__node flow-diagram__node--#{target.kind} flow-diagram__node--proxy", tabindex: 0,
+              data: { node: @token.fetch(proxy.id), up: up(proxy.id) }) do
             s.title { "Back to #{target.name}, earlier in the flow" }
             s.rect(x:, y:, width: BOX_W, height: PROXY_H, rx: 4, class: 'flow-diagram__box')
             s.text(x: x + 8, y: y + 21, class: 'flow-diagram__name') { truncate("↻ #{display_name(target)}", BOX_W - 16) }

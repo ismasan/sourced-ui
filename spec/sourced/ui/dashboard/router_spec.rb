@@ -329,6 +329,8 @@ RSpec.describe Sourced::UI::Dashboard::App do
       expect(last_response.status).to eq(200)
       expect(last_response.body).to include('TestProjector', 'kind-badge--projector', 'router_test.event', 'thing_id')
       expect(last_response.body).to include('class="flow-diagram"', 'flow-diagram__node--readmodel')
+      # An event's box opens its schema, as MessageName does.
+      expect(last_response.body).to include('data-message-type="router_test.event"', 'showMessageSchema(el); @get(')
     end
 
     it "shows a machine's statechart, its states and their commands" do

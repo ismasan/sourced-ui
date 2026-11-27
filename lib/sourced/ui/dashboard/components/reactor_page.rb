@@ -142,7 +142,8 @@ module Sourced
                 end
               end
               div(class: 'chart-card__canvas chart-card__canvas--flow') do
-                render Sourced::UI::Components::FlowDiagram.new(graph, href:, title: "#{@reactor.group_label} flows")
+                render Sourced::UI::Components::FlowDiagram.new(graph, href:, title: "#{@reactor.group_label} flows",
+                                                                   node_data: method(:schema_data))
               end
               p(class: 'chart-card__note') { 'Cut short: there is more downstream than shown.' } if graph.truncated?
             end
@@ -187,6 +188,17 @@ module Sourced
                 p(class: 'chart-card__note') { 'The flow goes on further downstream than shown.' }
               end
             end
+          end
+
+          # A command or event's box opens its payload schema in MessageName's
+          # dialog, beside it, on a click or Enter.
+          def schema_data(node)
+            return {} unless %i[command event].include?(node.kind)
+
+            url = helpers.url("/messages/schema?type=#{Rack::Utils.escape(node.id)}")
+            open = "showMessageSchema(el); @get(#{url.to_json})"
+            { 'message-type' => node.id, 'indicator:message-schema-loading' => true,
+              'on:click' => open, 'on:keydown' => "evt.key === 'Enter' && (#{open})" }
           end
 
           def render_handlers

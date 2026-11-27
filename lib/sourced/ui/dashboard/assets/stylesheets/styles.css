@@ -2488,8 +2488,13 @@ button.cmd:hover { text-decoration: none; border-color: var(--slate-400); }
 .flow-diagram__node.is-external .flow-diagram__box { fill-opacity: 0.55; stroke-dasharray: 4 2; }
 .flow-diagram__node--proxy .flow-diagram__box { fill-opacity: 0.35; stroke-dasharray: 2 3; }
 .flow-diagram__link:hover .flow-diagram__box { stroke-width: 2; }
+.flow-diagram [data-up] { transition: opacity 0.12s; }
+.flow-diagram__node { outline: none; }
+.flow-diagram__node.is-clickable { cursor: pointer; }
+.flow-diagram__node:is(:hover, :focus) .flow-diagram__box,
+.flow-diagram__link:focus .flow-diagram__box { stroke-width: 2.2; }
 .flow-diagram__edge { fill: none; stroke: var(--slate-400); stroke-width: 1.3; }
 .flow-diagram__edge--back { stroke: var(--slate-500); stroke-dasharray: 5 4; }
-.flow-diagram__arrow { fill: var(--slate-400); }
-.flow-diagram__arrow--back { fill: var(--slate-500); }
+/* Arrowheads take their line's colour, lit or not. */
+.flow-diagram__arrow { fill: var(--slate-400); fill: context-stroke; }
 .chart-card__canvas--flow { overflow-x: auto; padding: 1rem; background: white; }

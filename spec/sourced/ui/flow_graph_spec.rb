@@ -94,4 +94,31 @@ RSpec.describe Sourced::UI::FlowGraph do
     expect(html).to include('flow-diagram__edge--back')
     expect(html).not_to include('flow-diagram__node--proxy')
   end
+
+  describe 'picking a node out' do
+    # A node's [token, upstream tokens], by the name in its title.
+    def picks(html, name) = html.match(/data-node="(\w+)" data-up="([^"]*)"[^>]*><title>\w+: #{name}\n/).captures
+
+    it 'lists on each node and edge the nodes it\'s downstream of, by edges running forward' do
+      nodes = [cmd('c', 'L', %w[e]), evt('e', 'L'), aut('again', 'L', %w[e], %w[c]), rm('r', 'L', %w[e], [])]
+      html = Sourced::UI::Components::FlowDiagram.new(described_class.build(nodes, 'L')).call
+      token = ->(name) { picks(html, name).first }
+      up = ->(name) { picks(html, name).last.split }
+
+      expect(up.('c')).to eq([token.('c')])
+      expect(up.('r')).to contain_exactly(token.('c'), token.('e'), token.('r'))
+      # The edge back from again to c doesn't make c downstream of again.
+      expect(up.('again')).to contain_exactly(token.('c'), token.('e'), token.('again'))
+      expect(html).to include(%(.flow-diagram:has([data-node="#{token.('e')}"]:hover) [data-up]:not([data-up~="#{token.('e')}"])))
+      expect(html.scan('tabindex="0"').size).to eq(4)
+    end
+
+    it 'adds what node_data gives a node, a click instead of its reactor\'s link' do
+      data = ->(node) { node.kind == :command ? { 'on:click' => "open('#{node.id}')" } : {} }
+      html = Sourced::UI::Components::FlowDiagram.new(described_class.build(topology, 'Notifier'), href: ->(_) { '/r' }, node_data: data).call
+
+      expect(html).to include(%(data-on:click="open('rename')"), 'is-clickable')
+      expect(html).not_to match(%r{<a href="/r"[^>]*>\s*<g[^>]*>\s*<title>command})
+    end
+  end
 end
