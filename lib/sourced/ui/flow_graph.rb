@@ -25,8 +25,13 @@ module Sourced
     # Each node is drawn once, however many lead to it: several events feeding
     # one read model meet at it. Edges closing a cycle stay in the graph; the
     # diagram decides how to draw them.
+    #
+    # Built with +starts+, it's what's reachable from them instead (a
+    # machine's state, MachineSlice), and +context+ are nodes shown leading
+    # in but not the reactor's own, though they may be its.
     class FlowGraph
-      # +own+: one of the reactor's steps, or an event it appends.
+      # +own+: one of the reactor's steps, or an event it appends, unless it's context.
+      # +tags+ say what else it leads to that isn't drawn (see MachineSlice).
       Node = Data.define(:id, :kind, :name, :group_id, :group_label, :own, :schema, :tags, :transition)
       Edge = Data.define(:from, :to)
 
@@ -34,13 +39,16 @@ module Sourced
 
       # @param topology [Array<#to_h>] Sourced.topology's nodes
       # @param group_id [String] the reactor's group_id
+      # @param starts [Array<String>, nil] the ids to start from (the initiators reaching the reactor, if nil)
+      # @param context [Array<String>] ids shown, but not as the reactor's own
       # @return [FlowGraph]
-      def self.build(topology, group_id) = new(topology.map(&:to_h), group_id)
+      def self.build(topology, group_id, starts: nil, context: []) = new(topology.map(&:to_h), group_id, starts:, context:)
 
       attr_reader :group_id, :nodes, :edges, :starts
 
-      def initialize(topology, group_id)
+      def initialize(topology, group_id, starts: nil, context: [])
         @group_id = group_id
+        @context = context.to_set
         @all = topology
         @by_id = topology.to_h { [it[:id], it] }
         @consumers = Hash.new { |h, k| h[k] = [] }
@@ -48,7 +56,7 @@ module Sourced
         @produced = topology.flat_map { Array(it[:produces]) }.to_set
         @truncated = false
 
-        @starts = roots
+        @starts = starts ? first_of(starts.select { @by_id.key?(it) }.uniq) : roots
         reached = reach(@starts)
         @nodes = @all.select { reached.include?(it[:id]) }.map { node(it, reached) }
         @edges = @nodes.flat_map do |node|
@@ -85,6 +93,18 @@ module Sourced
           uncovered -= reached
         end
         starts
+      end
+
+      # +starts+ but those another reaches (an entry action, reached from
+      # the state's event), so each is drawn after what leads to it. Of two
+      # reaching each other, the first stays.
+      def first_of(starts)
+        reaches = starts.to_h { [it, reach([it])] }
+        starts.each_with_index.reject do |start, i|
+          starts.each_with_index.any? do |other, j|
+            other != start && reaches[other].include?(start) && (!reaches[start].include?(other) || j < i)
+          end
+        end.map(&:first)
       end
 
       def step?(node) = node[:group_id] == @group_id && node[:type] != 'event'
@@ -143,7 +163,7 @@ module Sourced
           end
         end
         Node.new(id: raw[:id], kind: raw[:type].to_sym, name: raw[:name], group_id:, group_label:,
-                 own: group_id == @group_id, schema: raw[:schema] || {}, tags: raw[:tags] || [],
+                 own: group_id == @group_id && !@context.include?(raw[:id]), schema: raw[:schema] || {}, tags: raw[:tags] || [],
                  transition: raw[:transition] == true)
       end
     end

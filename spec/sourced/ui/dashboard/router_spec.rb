@@ -363,9 +363,9 @@ RSpec.describe Sourced::UI::Dashboard::App do
       body = last_response.body
       expect(body).to match(/is-active" id="sc-on"/)
       expect(body).to include('Accepts', 'Refuses', '>Install<')
-      # What it takes there, as an event model: Dim stays. (Its data event,
+      # What it takes there, as flows: Dim stays. (Its data event,
       # Dimmed, isn't in Sourced.topology: handlers don't declare data events.)
-      expect(body).to include('class="event-model"', '>Dim<', '>stays<')
+      expect(body).to include('class="flow-diagram flow-diagram--right"', '>Dim<', '>stays<')
     end
 
     it "streams updates to the reactor's consumer group card" do

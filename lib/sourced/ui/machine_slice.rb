@@ -2,10 +2,10 @@
 
 module Sourced
   module UI
-    # A machine's event model in one state: what it takes there, what that
-    # appends, and what reacts downstream, as an EventFlow.
+    # A machine's flows in one state: what it takes there, what that appends,
+    # and what reacts downstream, as a FlowGraph.
     #
-    # The topology is cut down to the state before EventFlow walks it: of the
+    # The topology is cut down to the state before FlowGraph walks it: of the
     # machine's own commands and automations, only the commands the state
     # accepts (its own and its enclosing states') and the automations of the
     # state and its enclosing states remain, so the walk can't wander into the
@@ -27,7 +27,7 @@ module Sourced
       # @param machine [Class<Sourced::Machine>]
       # @param path [String] a state's path, as Machine.to_h ids it
       # @param topology [Array<#to_h>] Sourced.topology's nodes
-      # @return [EventFlow]
+      # @return [FlowGraph]
       def build(machine, path, topology)
         rows = MachineChart.rows(machine.to_h)
         row = rows.find { it.path == path } || raise(ArgumentError, "#{machine} has no state #{path.inspect}")
@@ -55,6 +55,7 @@ module Sourced
 
         seeds = sliced.select { it[:group_id] == group && it[:type] != 'event' }.map { it[:id] }
         entry = state_type(machine, path) unless row.type == 'initial'
+        arriving = []
         if entry
           # What moves the machine in, from elsewhere: only that move drawn.
           arriving = topology.map(&:to_h).select do |node|
@@ -63,7 +64,9 @@ module Sourced
           sliced += arriving.map { it.merge(produces: [entry], consumes: [], tags: []) }
         end
 
-        EventFlow.build(sliced, group, max_depth: 5, seeds:, entry:)
+        # How it gets in first, then what it takes here.
+        context = arriving.map { it[:id] }
+        FlowGraph.build(sliced, group, starts: [*context, *(entry ? [entry] : []), *seeds], context:)
       end
 
       private

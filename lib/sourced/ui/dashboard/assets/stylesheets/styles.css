@@ -2480,6 +2480,7 @@ button.cmd:hover { text-decoration: none; border-color: var(--slate-400); }
 }
 .flow-diagram__name { font-size: 11.5px; font-weight: 600; }
 .flow-diagram__group { font-size: 10px; opacity: 0.75; }
+.flow-diagram__tags { font-size: 10px; font-weight: 600; opacity: 0.8; }
 .flow-diagram__node--command .flow-diagram__box { fill: var(--em-command-fill); stroke: var(--em-command-stroke); }
 .flow-diagram__node--command text { fill: var(--em-command-ink); }
 .flow-diagram__node--event .flow-diagram__box { fill: var(--em-event-fill); stroke: var(--em-event-stroke); }

@@ -106,7 +106,8 @@ module Sourced
           @proxies = []
           @edges = [] # [id, from, to, back]
           pairs.each_with_index do |(from, to), i|
-            back = ranks.fetch(to) <= ranks.fetch(from)
+            # Into an earlier rank. One within a rank runs across it, not back.
+            back = ranks.fetch(to) < ranks.fetch(from)
             if from == to || (back && ranks.fetch(from) - ranks.fetch(to) > MAX_BACK)
               proxy = Proxy.new(id: "proxy:#{i}", target: to, from:)
               @proxies << proxy
@@ -186,7 +187,7 @@ module Sourced
           picks[:tabindex] = 0 unless href
           group = proc do
             s.g(class: classes.join(' '), **(href ? {} : picks)) do
-              s.title { "#{node.kind}: #{node.name}\n#{node.id}\nfrom #{node.group_label}" }
+              s.title { ["#{node.kind}: #{node.name}", node.id, "from #{node.group_label}", *node.tags].join("\n") }
               s.rect(x:, y:, width: BOX_W, height: BOX_H, rx: 4, class: 'flow-diagram__box')
               if node.kind == :automation
                 robot(s, x + 8, y + 6)
@@ -197,7 +198,10 @@ module Sourced
               short_lines(display_name(node), BOX_W - 16, 2).each_with_index do |line, i|
                 s.text(x: x + 8, y: y + 30 + i * LINE_H, class: 'flow-diagram__name') { line }
               end
-              if !node.own && node.kind != :event
+              # Its foot: what else it leads to (its tags), or another reactor's name.
+              if node.tags.any?
+                s.text(x: x + 8, y: y + BOX_H - 6, class: 'flow-diagram__tags') { truncate(node.tags.join(' '), BOX_W - 16) }
+              elsif !node.own && node.kind != :event
                 s.text(x: x + 8, y: y + BOX_H - 6, class: 'flow-diagram__group') { truncate(node.group_label, BOX_W - 16) }
               end
             end

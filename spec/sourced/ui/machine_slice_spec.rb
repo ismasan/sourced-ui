@@ -10,6 +10,7 @@ RSpec.describe Sourced::UI::MachineSlice do
 
   def slice(path) = described_class.build(SpecTrip, path, topology)
   def named(flow, name) = flow.nodes.find { it.name.end_with?("::#{name}") || it.name == name }
+  def starting(flow) = flow.starts.map { |id| flow.nodes.find { it.id == id } }
 
   it "takes the commands a state accepts, its own and its enclosing states', and nothing else of the machine" do
     flow = slice('checkout.paying')
@@ -41,7 +42,9 @@ RSpec.describe Sourced::UI::MachineSlice do
     timer = flow.nodes.find { it.kind == :automation }
 
     expect(timer.name).to eq('actions(checkout.paying)')
-    expect(flow.nodes.first.name).to eq('SpecTrip::Checkout::Paying')
+    expect(starting(flow).first.name).to eq('SpecTrip::Checkout::Paying')
+    # Drawn after the state's event, not started from: what it leads to follows it.
+    expect(flow.starts).not_to include(timer.id, 'spec_trip.checkout.expire')
     expect(flow.edges.map { [it.from, it.to] }).to include([timer.id, 'spec_trip.checkout.expire'])
   end
 
@@ -54,10 +57,12 @@ RSpec.describe Sourced::UI::MachineSlice do
 
   it "starts with how the machine gets into the state: its own event, after what appends it, not followed" do
     light = Sourced::UI::MachineSlice.build(SpecLight, 'broken', Sourced::Topology.build([SpecLight]))
-    first, second = light.nodes.first(2)
+    first, = starting(light)
+    second = named(light, 'Broken')
 
     expect([first.name, first.own]).to eq(['SpecLight::Break', false])
     expect([second.name, second.own]).to eq(['SpecLight::Broken', true])
+    expect(light.edges.map { [it.from, it.to] }).to include([first.id, second.id])
     # Break's other moves aren't followed: broken accepts nothing.
     expect(light.nodes.map(&:name)).not_to include('SpecLight::Toggle', 'SpecLight::On', 'SpecLight::Off')
   end
