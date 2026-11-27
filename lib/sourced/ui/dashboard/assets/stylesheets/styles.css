@@ -2492,7 +2492,7 @@ button.cmd:hover { text-decoration: none; border-color: var(--slate-400); }
 .flow-diagram__node.is-external .flow-diagram__box { fill-opacity: 0.55; stroke-dasharray: 4 2; }
 .flow-diagram__node--proxy .flow-diagram__box { fill-opacity: 0.35; stroke-dasharray: 2 3; }
 .flow-diagram__link:hover .flow-diagram__box { stroke-width: 2; }
-.flow-diagram [data-up] { transition: opacity 0.12s; }
+.flow-diagram [data-line] { transition: opacity 0.12s; }
 .flow-diagram__node { outline: none; }
 .flow-diagram__node.is-clickable { cursor: pointer; }
 .flow-diagram__node:is(:hover, :focus) .flow-diagram__box,

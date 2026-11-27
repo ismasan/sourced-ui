@@ -97,20 +97,37 @@ RSpec.describe Sourced::UI::FlowGraph do
 
   describe 'picking a node out' do
     # A node's [token, upstream tokens], by the name in its title.
-    def picks(html, name) = html.match(/data-node="(\w+)" data-up="([^"]*)"[^>]*><title>\w+: #{name}\n/).captures
+    def picks(html, name) = html.match(/data-node="(\w+)" data-line="([^"]*)"[^>]*><title>\w+: #{name}\n/).captures
 
-    it 'lists on each node and edge the nodes it\'s downstream of, by edges running forward' do
+    it "lists on each node the nodes whose branch it's on, by edges running forward" do
       nodes = [cmd('c', 'L', %w[e]), evt('e', 'L'), aut('again', 'L', %w[e], %w[c]), rm('r', 'L', %w[e], [])]
       html = Sourced::UI::Components::FlowDiagram.new(described_class.build(nodes, 'L')).call
       token = ->(name) { picks(html, name).first }
-      up = ->(name) { picks(html, name).last.split }
+      line = ->(name) { picks(html, name).last.split }
 
-      expect(up.('c')).to eq([token.('c')])
-      expect(up.('r')).to contain_exactly(token.('c'), token.('e'), token.('r'))
-      # The edge back from again to c doesn't make c downstream of again.
-      expect(up.('again')).to contain_exactly(token.('c'), token.('e'), token.('again'))
-      expect(html).to include(%(.flow-diagram:has([data-node="#{token.('e')}"]:hover) [data-up]:not([data-up~="#{token.('e')}"])))
+      # c leads to everything.
+      expect(line.('c')).to contain_exactly(*%w[c e again r].map(&token))
+      # The edge back from again to c doesn't put r on again's branch, nor again on r's.
+      expect(line.('r')).to contain_exactly(token.('c'), token.('e'), token.('r'))
+      expect(line.('again')).to contain_exactly(token.('c'), token.('e'), token.('again'))
+      expect(html).to include(%(.flow-diagram:has([data-node="#{token.('e')}"]:hover) [data-line]:not([data-line~="#{token.('e')}"])))
       expect(html.scan('tabindex="0"').size).to eq(4)
+    end
+
+    it "leaves out of a node's branch its siblings, and forks joining it downstream" do
+      # a appends e1 and e2; b appends e3; r reads e1 and e3.
+      nodes = [cmd('a', 'L', %w[e1 e2]), evt('e1', 'L'), evt('e2', 'L'), cmd('b', 'L', %w[e3]), evt('e3', 'L'),
+               rm('r', 'L', %w[e1 e3], [])]
+      html = Sourced::UI::Components::FlowDiagram.new(described_class.build(nodes, 'L')).call
+      token = ->(name) { picks(html, name).first }
+      on = ->(name) { %w[a e1 e2 b e3 r].select { picks(html, it).last.split.include?(token.(name)) } }
+      edges_on = ->(name) { html.scan(/class="flow-diagram__edge[^"]*"[^>]*data-line="([^"]*)"/).flatten.count { it.split.include?(token.(name)) } }
+
+      expect(on.('e1')).to contain_exactly('a', 'e1', 'r')
+      expect(on.('a')).to contain_exactly('a', 'e1', 'e2', 'r')
+      expect(on.('r')).to contain_exactly('a', 'e1', 'b', 'e3', 'r')
+      # Of the edges, e1's branch takes a → e1 and e1 → r only.
+      expect(edges_on.('e1')).to eq(2)
     end
 
     it 'adds what node_data gives a node, a click instead of its reactor\'s link' do
