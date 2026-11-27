@@ -55,7 +55,7 @@ module Sourced
               render_machine_messages(klass)
               render_dispatches('Dispatches, by state', 'state', machine_dispatches(klass))
             else
-              render_event_model
+              render_flows
               render_messages(klass)
               render_dispatches('Dispatches, by what it reacts to', 'reaction', reaction_dispatches)
             end
@@ -83,7 +83,7 @@ module Sourced
 
           # Its flows, top to bottom to fit the column. A command or event's
           # box opens its schema.
-          def render_event_model
+          def render_flows
             graph = FlowGraph.build(@topology, @entry.group_id)
             return if graph.empty?
 

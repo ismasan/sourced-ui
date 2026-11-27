@@ -156,7 +156,7 @@ module Sourced
           # alternatives (+anyOf+, or a list of types) is said apart, so a
           # nullable string reads string, not null.
           def type_of(prop)
-            label = ->(p) { Sourced::UI::Components::EventModel.type_label(p) }
+            label = ->(p) { type_label(p) }
             variants = prop['anyOf'] || prop['oneOf']
             if variants
               nulls, rest = variants.partition { it['type'] == 'null' }
@@ -166,6 +166,16 @@ module Sourced
             return [label.(prop.merge('type' => types - ['null'])), true] if types.include?('null') && types.size > 1
 
             [label.(prop), false]
+          end
+
+          # A JSON schema property's type, briefly: string, [integer], a|b, date-time.
+          def type_label(prop)
+            variants = prop['anyOf'] || prop['oneOf']
+            return variants.map { type_label(it) }.uniq.then { |l| l.size > 1 ? (l - ['string']) : l }.join('|') if variants
+            return prop['enum'].map(&:to_s).join('|') if prop['enum']
+            return "[#{type_label(prop['items'] || {})}]" if prop['type'] == 'array'
+
+            (prop['format'] || Array(prop['type']).join('|')).then { it.empty? ? 'any' : it }
           end
 
           def payload_schema(klass)

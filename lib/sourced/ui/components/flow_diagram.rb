@@ -288,16 +288,16 @@ module Sourced
 
         # A robot's head, for automations: 14 wide, 13 high.
         def robot(s, x, y)
-          s.g(class: 'event-model__robot', transform: "translate(#{x} #{y})") do
+          s.g(class: 'flow-diagram__robot', transform: "translate(#{x} #{y})") do
             s.line(x1: 7, y1: 1.5, x2: 7, y2: 4)
             s.circle(cx: 7, cy: 1.2, r: 1.2)
             s.rect(x: 1, y: 4, width: 12, height: 9, rx: 2.5)
-            s.circle(cx: 4.6, cy: 8.5, r: 1.1, class: 'event-model__robot-eye')
-            s.circle(cx: 9.4, cy: 8.5, r: 1.1, class: 'event-model__robot-eye')
+            s.circle(cx: 4.6, cy: 8.5, r: 1.1, class: 'flow-diagram__robot-eye')
+            s.circle(cx: 9.4, cy: 8.5, r: 1.1, class: 'flow-diagram__robot-eye')
           end
         end
 
-        # The naming below is EventModel's (prototype: shared by copy).
+        # Names, shortened: class paths to their shortest unambiguous tails.
         CLASS_PATH = /\b[A-Z]\w*(?:::[A-Z]\w*)+\b/
 
         def display_name(node)
