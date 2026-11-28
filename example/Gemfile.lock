@@ -1,18 +1,32 @@
 GIT
   remote: https://github.com/ismasan/sidereal.git
-  revision: 936d509b98223fa7fe0d265aa5fb03e8bf1e1a53
+  revision: 35fc22bfb34b1f3a8638701c93738b2057ce7f46
   specs:
     sidereal (0.1.0)
       async
+      base64
       brotli
       datastar (~> 1.0.6)
       phlex
-      plumb (~> 0.4)
+      plumb (~> 0.4, >= 0.4.1)
       rack (~> 3)
       rack-session
-      sourced-component (~> 0.1)
+      samovar
+      sourced-component (~> 0.1, >= 0.1.5)
       sourced-message (>= 0.4.0)
       tsort
+
+GIT
+  remote: https://github.com/ismasan/sourced.git
+  revision: 29d3a8df879ccc07c7d84a16e0a265b09c436da0
+  specs:
+    sourced (0.0.1)
+      async
+      plumb (>= 0.4.1)
+      sequel
+      sourced-component (~> 0.1, >= 0.1.5)
+      sourced-message (>= 0.6.0)
+      sqlite3 (>= 2.10.2)
 
 PATH
   remote: ..
@@ -22,17 +36,6 @@ PATH
       phlex
       sidereal
       sourced
-
-PATH
-  remote: /Users/ismasan/code/personal/gems/sourced
-  specs:
-    sourced (0.0.1)
-      async
-      plumb (= 0.4.0)
-      sequel
-      sourced-component (~> 0.1, >= 0.1.1)
-      sourced-message (>= 0.5.3)
-      sqlite3
 
 GEM
   remote: https://rubygems.org/
@@ -120,7 +123,7 @@ GEM
     phlex (2.4.1)
       refract (~> 1.0)
       zeitwerk (~> 2.7)
-    plumb (0.4.0)
+    plumb (0.4.2)
       bigdecimal
       concurrent-ruby
     pp (0.6.3)
@@ -161,14 +164,14 @@ GEM
       mapping (~> 1.0)
     sequel (5.102.0)
       bigdecimal
-    sourced-component (0.1.1)
+    sourced-component (0.1.5)
       plumb (~> 0.4)
       sourced-message
       tsort (~> 0.2)
-    sourced-message (0.5.3)
+    sourced-message (0.6.0)
       fugit
-      plumb (>= 0.4)
-    sqlite3 (2.9.2-arm64-darwin)
+      plumb (>= 0.4.1)
+    sqlite3 (2.10.2-arm64-darwin)
     string-format (0.2.0)
     stringio (3.2.0)
     traces (0.18.2)
@@ -224,7 +227,7 @@ CHECKSUMS
   metrics (0.15.0) sha256=61ded5bac95118e995b1bc9ed4a5f19bc9814928a312a85b200abbdac9039072
   openssl (4.0.1) sha256=e27974136b7b02894a1bce46c5397ee889afafe704a839446b54dc81cb9c5f7d
   phlex (2.4.1) sha256=e596717fbfe38b5271840266758779ebe75092e02629f0c170287e6290a70b12
-  plumb (0.4.0) sha256=10c256a6f98363fd535ebe812123f3555e0a557035435f3b9b43cd5fb3d87f72
+  plumb (0.4.2) sha256=c83458005e424ea6d6b98e66dd59ff3921268fbab876fdc9d51b389968862113
   pp (0.6.3) sha256=2951d514450b93ccfeb1df7d021cae0da16e0a7f95ee1e2273719669d0ab9df6
   prettyprint (0.2.0) sha256=2bc9e15581a94742064a3cc8b0fb9d45aae3d03a1baa6ef80922627a0766f193
   prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
@@ -245,10 +248,10 @@ CHECKSUMS
   sequel (5.102.0) sha256=c25bb85a44ae59b3ed41ca7c32c33316cf81a6fcaeabedb4036ba141dde70919
   sidereal (0.1.0)
   sourced (0.0.1)
-  sourced-component (0.1.1) sha256=61a0823a2f89e39dc08cdfaf1a6f565abed0a4edaad67241811da16004cdaa61
-  sourced-message (0.5.3) sha256=3d3f961157628e468e18486b81c0893c37a29fa52fae4b47f45260f74510a19d
+  sourced-component (0.1.5) sha256=515e7f6461d3966d8517fa1caa8c3eba9cf3554ada0a39eee0d187d578a64efb
+  sourced-message (0.6.0) sha256=dd8d7b4a72baf44dc2abcc3ca81183eb671a9b1947395d2d82ec40f74aab3be8
   sourced-ui (0.1.0)
-  sqlite3 (2.9.2-arm64-darwin) sha256=d15bd9609a05f9d54930babe039585efc8cadd57517c15b64ec7dfa75158a5e9
+  sqlite3 (2.10.2-arm64-darwin) sha256=5b0d235ea037e6dcd1b8387a19d73be571917db9f93044d35741cf933a21a37d
   string-format (0.2.0) sha256=bc981c14116b061f12134549f32fa2d61a17b5a35dd6fd36596c21722a789af6
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
   traces (0.18.2) sha256=80f1649cb4daace1d7174b81f3b3b7427af0b93047759ba349960cb8f315e214

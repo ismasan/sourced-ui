@@ -212,6 +212,8 @@ After checking out the repo, run `bin/setup` to install dependencies. Then, run 
 
 `example/` is a small task app with the dashboard mounted, for trying the UI in a browser. It has a decider and a projector for tasks, and a `Sourced::Machine`, `TaskApp::TaskReview`, for the machine pages. The machine reviews a task's code and docs in parallel regions, with an entry action, a timer and data events.
 
+`bin/example` does all of this: it installs the example's gems, checks the app loads (Falcon hides a load error, and only hangs at "Waiting for startup..."), seeds the database if there isn't one, serves the app and opens it in terminal-browser when that's installed. Pass `--reset` to start from a fresh database, or `--no-open`; `PORT`, `DB_PATH` and `TASK_COUNT` (default 50) are read from the environment. By hand:
+
 ```bash
 cd example
 bundle install

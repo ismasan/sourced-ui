@@ -8,6 +8,7 @@
 
 require_relative 'domain'
 require 'securerandom'
+require 'async'
 
 # No workers while seeding tasks: they'd contend with its writes for the
 # database. TaskDecider and TaskLogProjector run no reactions, so they can
@@ -95,31 +96,37 @@ STEPS = {
   abandoned: [[review::Abandon]]
 }.freeze
 
-# Workers now, to run TaskReview's entry actions as the reviews go. They first
-# catch up with the tasks, and would contend with the reviews for the database
-# meanwhile: wait until they're idle (nothing claimed, no offset moving).
-Sourced.config.start_component!('dispatcher', Thread.current)
-print '  Catching up...'
-offsets = -> { Sourced.store.read_offsets(limit: 100_000).offsets.map { [it[:last_position], it[:claimed]] } }
-last = nil
-until (now = offsets.call) == last && now.none?(&:last)
-  last = now
-  sleep 0.5
-end
-puts ' done.'
-
-reviewed = task_ids.sample(TASK_COUNT / 2)
-examples = {}
-reviewed.each_with_index do |task_id, i|
-  outcome, steps = STEPS.to_a[i % STEPS.size]
-  [[review::RequestReview, { reviewer: REVIEWERS.sample }], *steps].each do |command_class, payload|
-    Sourced.handle!(review, command_class.new(payload: { task_id:, **(payload || {}) }))
-    settle(review, task_id)
+# Sourced runs its workers on fibers: they start into this Async task, which
+# stops them once the reviews are in.
+Sync do |task|
+  # Workers now, to run TaskReview's entry actions as the reviews go. They first
+  # catch up with the tasks, and would contend with the reviews for the database
+  # meanwhile: wait until they're idle (nothing claimed, no offset moving).
+  Sourced.config.start_component!('dispatcher', task)
+  print '  Catching up...'
+  offsets = -> { Sourced.store.read_offsets(limit: 100_000).offsets.map { [it[:last_position], it[:claimed]] } }
+  last = nil
+  until (now = offsets.call) == last && now.none?(&:last)
+    last = now
+    sleep 0.5
   end
-  examples[outcome] ||= task_id
-  print "\r  Reviewed #{i + 1}/#{reviewed.size}"
-end
-puts
+  puts ' done.'
 
-puts 'Browse a review, ex.:'
-examples.each { |outcome, task_id| puts "  #{outcome}: http://localhost:9292/reactors/#{review.group_id}/instance?task_id=#{task_id}" }
+  reviewed = task_ids.sample(TASK_COUNT / 2)
+  examples = {}
+  reviewed.each_with_index do |task_id, i|
+    outcome, steps = STEPS.to_a[i % STEPS.size]
+    [[review::RequestReview, { reviewer: REVIEWERS.sample }], *steps].each do |command_class, payload|
+      Sourced.handle!(review, command_class.new(payload: { task_id:, **(payload || {}) }))
+      settle(review, task_id)
+    end
+    examples[outcome] ||= task_id
+    print "\r  Reviewed #{i + 1}/#{reviewed.size}"
+  end
+  puts
+
+  puts 'Browse a review, ex.:'
+  examples.each { |outcome, task_id| puts "  #{outcome}: http://localhost:#{ENV.fetch("PORT", 9292)}/reactors/#{review.group_id}/instance?task_id=#{task_id}" }
+
+  task.stop
+end

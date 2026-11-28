@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Runs the example app (example/) with the dashboard mounted.
+#
+#   bin/example            install, seed if there's no database, serve, open
+#   bin/example --reset    start from a fresh, newly seeded database
+#   bin/example --no-open  don't open the dashboard in terminal-browser
+#
+# PORT (default 9292), DB_PATH (default example/storage/tasks.db) and
+# TASK_COUNT (tasks to seed, default 50) are read from the environment.
+set -euo pipefail
+
+reset=0
+open=1
+for arg in "$@"; do
+  case "$arg" in
+    --reset) reset=1 ;;
+    --no-open) open=0 ;;
+    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "Unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
+
+cd "$(dirname "$0")/../example"
+port="${PORT:-9292}"
+export DB_PATH="${DB_PATH:-$PWD/storage/tasks.db}"
+url="http://localhost:$port"
+
+bundle check >/dev/null || bundle install
+
+# Load the app before serving it: Falcon hides an error raised loading
+# config.ru, and only hangs at "Waiting for startup...". A stale gem in
+# example/Gemfile.lock (sidereal, say) fails here, with its message.
+echo "Checking the app loads..."
+bundle exec ruby -e 'require "./domain"; require "sourced/ui/dashboard"' || {
+  echo "The example app doesn't load. If a gem is behind, try: (cd example && bundle update sidereal sourced)" >&2
+  exit 1
+}
+
+if [[ $reset == 1 ]]; then
+  rm -f "$DB_PATH" "$DB_PATH-shm" "$DB_PATH-wal"
+fi
+if [[ ! -f "$DB_PATH" ]]; then
+  mkdir -p "$(dirname "$DB_PATH")"
+  echo "Seeding $DB_PATH..."
+  TASK_COUNT="${TASK_COUNT:-50}" bundle exec ruby seed.rb
+fi
+
+bundle exec falcon serve -b "$url" -n 1 &
+server=$!
+trap 'kill $server 2>/dev/null || true' EXIT INT TERM
+
+echo "Waiting for $url..."
+for _ in $(seq 1 30); do
+  curl -s -o /dev/null -m 2 "$url/log" && break
+  kill -0 $server 2>/dev/null || { echo "The server exited." >&2; exit 1; }
+  sleep 1
+done
+
+if [[ $open == 1 ]] && command -v terminal-browser >/dev/null; then
+  # A tab in this terminal tab's browser if it has one, else a pane beside this.
+  terminal-browser new-tab "$url" 2>/dev/null || terminal-browser open "$url" --split right --size 0.6
+else
+  echo "Dashboard: $url"
+fi
+
+wait $server
