@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'nokogiri'
 require 'sourced/ui/components'
 require_relative '../../support/spec_shop'
 require_relative '../../support/spec_light'
@@ -352,6 +353,17 @@ RSpec.describe Sourced::UI::Dashboard::Components::MessageSchema do
     expect(html).to include('kind-badge--command', 'SpecShop::ChargePayment', 'spec_shop.charge_payment',
                             '<code class="message-schema__attr">order_id</code>', '<code class="message-schema__type">string</code>',
                             'required')
+  end
+
+  it "marks the attributes it declares as references, which the store indexes" do
+    klass = Sourced::Event.define('spec_schema.noted') do
+      reference :note_id, String
+      attribute :text, String
+    end
+    html = described_class.new(klass).call(context:)
+    cells = Nokogiri::HTML.fragment(html).css('.message-schema__fields tbody tr td:first-child')
+    marked = cells.to_h { [it.at_css('.message-schema__attr').text, !it.at_css('.message-schema__reference').nil?] }
+    expect(marked).to eq('note_id' => true, 'text' => false)
   end
 
   it "lists nested objects' and arrays' attributes after them, and descriptions" do

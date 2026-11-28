@@ -26,14 +26,14 @@ GIT
 
 GIT
   remote: https://github.com/ismasan/sourced.git
-  revision: 2d77dcd051f469ad929159b8ca67469100464aaa
+  revision: 29d3a8df879ccc07c7d84a16e0a265b09c436da0
   specs:
     sourced (0.0.1)
       async
       plumb (>= 0.4.1)
       sequel
       sourced-component (~> 0.1, >= 0.1.5)
-      sourced-message (>= 0.5.4)
+      sourced-message (>= 0.6.0)
       sqlite3 (>= 2.10.2)
 
 PATH
@@ -85,7 +85,7 @@ GEM
       prism (>= 1.3.0)
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
-    json (3.1.0)
+    json (3.2.0)
     kramdown (2.5.2)
       rexml (>= 3.4.4)
     kramdown-parser-gfm (1.1.0)
@@ -110,7 +110,7 @@ GEM
     phlex (2.4.1)
       refract (~> 1.0)
       zeitwerk (~> 2.7)
-    plumb (0.4.1)
+    plumb (0.4.2)
       bigdecimal
       concurrent-ruby
     pp (0.6.4)
@@ -169,9 +169,9 @@ GEM
       plumb (~> 0.4)
       sourced-message
       tsort (~> 0.2)
-    sourced-message (0.5.4)
+    sourced-message (0.6.0)
       fugit
-      plumb (>= 0.4)
+      plumb (>= 0.4.1)
     sqlite3 (2.10.2-aarch64-linux-gnu)
     sqlite3 (2.10.2-aarch64-linux-musl)
     sqlite3 (2.10.2-arm-linux-gnu)
@@ -229,7 +229,7 @@ CHECKSUMS
   io-console (0.9.4) sha256=a403304f32928ee85e56d457b4612ca43f2703b561a3258844992bd24085fbb1
   io-event (1.22.3) sha256=1b12f144898bd36b689ee1e0898750fc04adf039188c7e24a05f21fa63cc6adb
   irb (1.18.0) sha256=de9454a0703a54704b9811a5ef31a60c86949fbf4013fcf244fabc7c775248e3
-  json (3.1.0) sha256=3ce7ccf8fde58960177a3a756c31f292a4c1e1dedee884547096a5b0604e3bd8
+  json (3.2.0) sha256=4a4e222a9ee6ffb296ab3171b6b39d85fec83afc4e7b57eee17edf68c74aec87
   kramdown (2.5.2) sha256=1ba542204c66b6f9111ff00dcc26075b95b220b07f2905d8261740c82f7f02fa
   kramdown-parser-gfm (1.1.0) sha256=fb39745516427d2988543bf01fc4cf0ab1149476382393e0e9c48592f6581729
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
@@ -242,7 +242,7 @@ CHECKSUMS
   nokogiri (1.19.4-x86_64-linux-gnu) sha256=379fae440b28915e3f19d752ce2dcf8465ed2b2fbefd2a7ca0dd497bc981a06a
   nokogiri (1.19.4-x86_64-linux-musl) sha256=17dfb7c1fa194ae02fbf7c51a7afc8d278045ab3fdacfd86f91d02d7b274470b
   phlex (2.4.1) sha256=e596717fbfe38b5271840266758779ebe75092e02629f0c170287e6290a70b12
-  plumb (0.4.1) sha256=b29badb4fea2076c428e80952cf6e16b5a1031134790253e733ea724b0950bdd
+  plumb (0.4.2) sha256=c83458005e424ea6d6b98e66dd59ff3921268fbab876fdc9d51b389968862113
   pp (0.6.4) sha256=dfcb0fce700c41456265922884f9fe195d7fbb0674a3578e6c0f69588e82b570
   prettyprint (0.2.1) sha256=d555d57ea6d7cf001d4774b693546a6bd88bec1e778ddffb5c60b68ceec4b7d4
   prism (2.1.0-aarch64-linux-gnu) sha256=808dddc72def68e1a0463689414c97e0ba211938eddbab05387a4844aa2b3ec2
@@ -274,7 +274,7 @@ CHECKSUMS
   sidereal (0.1.0)
   sourced (0.0.1)
   sourced-component (0.1.5) sha256=515e7f6461d3966d8517fa1caa8c3eba9cf3554ada0a39eee0d187d578a64efb
-  sourced-message (0.5.4) sha256=f373425b72ce30a05955e0b70e08797a25989e1dfb8d2511bad07e10f590f5a0
+  sourced-message (0.6.0) sha256=dd8d7b4a72baf44dc2abcc3ca81183eb671a9b1947395d2d82ec40f74aab3be8
   sourced-ui (0.1.0)
   sqlite3 (2.10.2-aarch64-linux-gnu) sha256=e9aea2c2b3476fc875dd8a89313a9a2862818519c0186bfb5b56d6f57bb08d98
   sqlite3 (2.10.2-aarch64-linux-musl) sha256=4986fc40cdf21342362b72a941df28e95cfe0e644f3ad2532d948b157c39dbee

@@ -343,15 +343,16 @@ module Sourced
         end
 
         # What the filters select, nil for all: each filter, its type's
-        # messages with the attribute values given (those it declares), and
-        # either filter's. A filter without values selects nothing more.
+        # messages with the reference values given (those it declares as
+        # references, the only attributes the store indexes), and either
+        # filter's. A filter without values selects nothing more.
         #
         # @return [Sourced::Selector, nil]
         def filters_to_selector(filters)
           parsed = Sourced::UI::Components::Types::Filters.parse(filters)
           parsed.filter_map { |entry|
             type = entry[:type]
-            declared = type.payload_attribute_names
+            declared = type.reference_attribute_names
             values = entry[:attributes].to_h { |key, value| [key.to_sym, value] }
               .select { |key, value| declared.include?(key) && !value.to_s.empty? }
             Sourced::Selector[type].by(**values) unless values.empty?

@@ -11,8 +11,8 @@
 #   Shipment (machine)  starts a Parcel machine per parcel; Parcel finishes
 #                       back into it
 module SpecShop
-  def self.command(name, *attrs) = Sourced::Command.define("spec_shop.#{name}") { attrs.each { |a| attribute a, String } }
-  def self.event(name, *attrs) = Sourced::Event.define("spec_shop.#{name}") { attrs.each { |a| attribute a, String } }
+  def self.command(name, *attrs) = Sourced::Command.define("spec_shop.#{name}") { attrs.each { |a| reference a, String } }
+  def self.event(name, *attrs) = Sourced::Event.define("spec_shop.#{name}") { attrs.each { |a| reference a, String } }
 
   PlaceOrder = command(:place_order, :order_id)
   OrderPlaced = event(:order_placed, :order_id)

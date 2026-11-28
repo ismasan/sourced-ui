@@ -84,6 +84,7 @@ module Sourced
           def initialize(klass)
             @klass = klass
             @schema = payload_schema(klass)
+            @references = klass.respond_to?(:reference_attribute_names) ? klass.reference_attribute_names.map(&:to_s) : []
           end
 
           def view_template
@@ -122,6 +123,7 @@ module Sourced
                   tr do
                     td do
                       code(class: 'message-schema__attr') { name }
+                      reference_badge if @references.include?(name)
                       p(class: 'message-schema__desc') { prop['description'] } if prop['description']
                     end
                     td do
@@ -134,6 +136,14 @@ module Sourced
                 end
               end
             end
+          end
+
+          # Marks a reference: an attribute the store indexes the message by,
+          # which reactors partition by and the log filters on. References are
+          # top-level, so a nested path (+address.city+) never matches one.
+          def reference_badge
+            span(class: 'message-schema__reference',
+                 title: 'Indexed by the store: reactors partition by it, and the log filters on it') { 'reference' }
           end
 
           # [name, property, required] for each attribute, an object's own

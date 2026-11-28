@@ -7,8 +7,9 @@ require 'sourced/ui/components'
 
 RSpec.describe Sourced::UI::Components::MessageFilter do
   FilterTestEvent = Sourced::Event.define('test.thing_created') do
-    attribute :name, String
-    attribute :amount, Integer
+    reference :name, String
+    reference :amount, Integer
+    attribute :notes, String
   end unless defined?(FilterTestEvent)
 
   FilterTestCommand = Sourced::Command.define('test.create_thing') do
@@ -55,7 +56,7 @@ RSpec.describe Sourced::UI::Components::MessageFilter do
       expect(type_label.text).to eq('test.thing_created')
     end
 
-    it 'renders text inputs for each payload attribute' do
+    it 'renders text inputs for each reference, the attributes the store indexes' do
       filters = [filter_entry(FilterTestEvent)]
       html = render(described_class.new(filters:))
       doc = parse(html)

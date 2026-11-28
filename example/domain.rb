@@ -10,10 +10,10 @@ module TaskApp
   class Event < Sourced::Message; end
   class Command < Sourced::Message; end
 
-  CreateTask    = Command.define('tasks.create')   { attribute :task_id, String; attribute :title, String }
-  TaskCreated   = Event.define('tasks.created')     { attribute :task_id, String; attribute :title, String }
-  CompleteTask  = Command.define('tasks.complete')  { attribute :task_id, String }
-  TaskCompleted = Event.define('tasks.completed')   { attribute :task_id, String }
+  CreateTask    = Command.define('tasks.create')   { reference :task_id, String; attribute :title, String }
+  TaskCreated   = Event.define('tasks.created')     { reference :task_id, String; attribute :title, String }
+  CompleteTask  = Command.define('tasks.complete')  { reference :task_id, String }
+  TaskCompleted = Event.define('tasks.completed')   { reference :task_id, String }
 
   # --- Decider ---
 

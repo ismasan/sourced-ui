@@ -75,7 +75,8 @@ module Sourced
               span { type }
             end
             div(class: 'message-filter__attrs') do
-              message_class.payload_attribute_names.each do |attr_name|
+              # Only references: the store indexes nothing else to filter by.
+              message_class.reference_attribute_names.each do |attr_name|
                 label(class: 'message-filter__field') do
                   span(class: 'message-filter__field-name') { "#{attr_name}:" }
                   input(

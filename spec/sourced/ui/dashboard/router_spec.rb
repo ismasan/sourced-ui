@@ -19,7 +19,7 @@ RSpec.describe Sourced::UI::Dashboard::App do
   end
 
   RouterTestEvent = Sourced::Event.define('router_test.event') do
-    attribute :thing_id, String
+    reference :thing_id, String
   end
 
   class TestProjector < Sourced::Projector::EventSourced

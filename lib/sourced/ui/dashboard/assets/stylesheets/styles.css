@@ -2396,6 +2396,16 @@ button.cmd:hover { text-decoration: none; border-color: var(--slate-400); }
 .message-schema__type { font-size: 11.5px; color: var(--teal-700); overflow-wrap: anywhere; }
 .message-schema__desc { margin: 0.15rem 0 0; font-size: 11.5px; color: var(--slate-500); }
 .message-schema__none { margin: 0; }
+.message-schema__reference {
+  margin-left: 0.35rem;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  font-size: 10px;
+  color: var(--amber-700);
+  background: var(--amber-50);
+  border: 1px solid var(--amber-100);
+  cursor: help;
+}
 .message-schema__nullable {
   margin-left: 0.35rem;
   padding: 0 0.3rem;
